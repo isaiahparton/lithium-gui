@@ -27,6 +27,7 @@ ColorIndex :: enum {
 Style :: struct {
 	font: Font,
 	corner_radius, padding, spacing, text_padding, outline_thick, depth: f32,
+	icon_size: int,
 	colors: [ColorIndex]Color,
 }
 Cursor :: struct{
@@ -68,17 +69,21 @@ Context :: struct {
 	style: Style,
 	// screen size
 	width, height: f32,
-	// cursor
-	hide_cursor: bool,
+	// focus control
+	hide_cursor, popup: bool,
+	// icon atlas
+	icon_atlas: raylib.Texture,
+	icon_cols: int,
 }
 ctx : Context = {}
 
 init_context :: proc(){
 	using ctx
-	{
-
-	}
 	init_default_style()
+	{
+		icon_atlas = raylib.LoadTexture("./icons/atlas.png")
+		icon_cols = cast(int)icon_atlas.width / style.icon_size
+	}
 }
 init_default_style :: proc(){
 	using ctx.style
@@ -95,8 +100,9 @@ init_default_style :: proc(){
 	spacing = 14
 	corner_radius = 8
 	depth = 3
-	font = raylib.LoadFontEx("./fonts/Muli-SemiBold.ttf", 30, nil, 1024)
-	raylib.SetTextureFilter(font.texture, .POINT)
+	icon_size = 24
+	font = raylib.LoadFontEx("./fonts/Muli-SemiBold.ttf", 26, nil, 1024)
+	raylib.SetTextureFilter(font.texture, .BILINEAR)
 }
 
 begin :: proc(){
@@ -189,9 +195,7 @@ end :: proc(){
 		} else {
 			control.focus_time[i] -= control.focus_time[i] * FADE_SPEED * GetFrameTime()
 		}
-		if control.exists[i] {
-			control.exists = false
-		}
+		control.exists = false
 	}
 	if hover_id != 0 {
 		if hover_text {

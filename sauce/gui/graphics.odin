@@ -2,6 +2,30 @@ package gui
 import "vendor:raylib"
 import "core:math"
 
+Icon :: enum {
+    glyphs,
+    undo,
+    redo,
+    heart,
+    star,
+}
+draw_icon :: proc(origin: [2]f32, icon: Icon, align_x, align_y: Alignment, tint: Color){
+    using ctx
+    origin := origin
+    size := f32(style.icon_size)
+    if align_x == .center {
+        origin.x -= size / 2
+    } else if align_x == .far {
+        origin.x -= size
+    }
+    if align_y == .center {
+        origin.y -= size / 2
+    } else if align_y == .far {
+        origin.y -= size
+    }
+    raylib.DrawTexturePro(icon_atlas, {f32(int(icon) % icon_cols) * size, f32(int(icon) / icon_cols) * size, size, size}, {origin.x, origin.y, size, size}, {0, 0}, 0, tint)
+}
+
 blend_colors :: proc(dst: Color, src: Color, val: f32) -> Color{
     return raylib.ColorAlphaBlend(dst, src, raylib.Fade(raylib.WHITE, val))
 }
@@ -119,8 +143,9 @@ draw_rounded_rect :: proc(rec: Rectangle, radius: f32, segments: int, color: Col
 
 draw_rounded_rect_lines :: proc(rec: Rectangle, radius: f32, segments: int, lineThick: f32, color: Color) {
 	using raylib
-	lineThick := lineThick
-    if lineThick < 0 do lineThick = 0
+	if lineThick <= 0 {
+        return
+    }
 
     // Not a rounded rectangle
     if (radius <= 0.0)

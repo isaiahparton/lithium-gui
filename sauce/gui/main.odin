@@ -27,12 +27,12 @@ main :: proc(){
 
 		push_layout()
 
-		layout_set_size(200, 40)
-		layout_set_side(.bottom)
 		layout_place_at({}, {0, 0, 200, 40}, {})
 		if .change in text_box(&title, {}) {
 			SetWindowTitle(strings.clone_to_cstring(title))
 		}
+		layout_set_size(200, 30)
+		layout_set_side(.bottom)
 
 		text("Corner roundness", .near, .near, {})
 		slider(&ctx.style.corner_radius, 0, 12, {})
@@ -58,10 +58,16 @@ main :: proc(){
 		text(fmt.aprint(ctx.style.depth), .near, .center, {})
 		pop_layout()
 
+		text("Outline thickness", .near, .near, {})
+		slider(&ctx.style.outline_thick, 0, 3, {})
+		push_attached_layout(.right)
+		text(fmt.aprint(ctx.style.outline_thick), .near, .center, {})
+		pop_layout()
+
 		pop_layout()
 
 		push_layout()
-		layout_set_size(200, 40)
+		layout_set_size(200, 30)
 		layout_set_side(.bottom)
 		layout_place_at({x=1}, {-200, 0, 200, 40}, {})
 		for i in 0..=4 {
@@ -73,8 +79,10 @@ main :: proc(){
 		end_widget()
 
 		end()
+
+		draw_icon({0, 0}, .star, .near, .near, DARKGRAY)
 		
-		DrawFPS(0, 0)
+		//DrawFPS(0, 0)
 
 		EndDrawing()
 	}

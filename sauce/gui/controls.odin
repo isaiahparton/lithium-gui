@@ -214,7 +214,7 @@ text_box :: proc(content: ^string, opts: Option_Set, loc := #caller_location) ->
 	    			DrawRectangleRec({x - 1, y + font_height / 2 - h / 2, 2, h}, style.colors[.text])
 	    		}
 	    	} else if i >= cursor.index && i < cursor.index + cursor.length {
-	        	DrawRectangleRec({max(x, rect.x), y, min(rect.width - (x - rect.x), rune_width), font_height}, style.colors[.text])
+	        	DrawRectangleRec({max(x, rect.x), y, min(rect.width - (x - rect.x), rune_width + 1), font_height}, style.colors[.text])
 	        	highlight = true
 	        }
         }
@@ -223,7 +223,7 @@ text_box :: proc(content: ^string, opts: Option_Set, loc := #caller_location) ->
         	break
         }
 
-		draw_rune_pro(font, codepoint, {x, y}, {rect.x, rect.y, rect.width - (x - rect.x), rect.height}, font_height, style.colors[.fill] if highlight else style.colors[.text])
+		draw_rune_pro(font, codepoint, {x, y}, {rect.x, rect.y, (rect.x + rect.width) - x, rect.height}, font_height, style.colors[.fill] if highlight else style.colors[.text])
 		x += rune_width
 		i += bytecount
 
@@ -245,15 +245,16 @@ text_box :: proc(content: ^string, opts: Option_Set, loc := #caller_location) ->
 				if IsMouseButtonPressed(.LEFT) && mouse_index != -1 {
 					cursor.drag_from = mouse_index
 				}
-				if IsMouseButtonDown(.LEFT) {
-					if mouse_index < cursor.drag_from {
-						cursor.index = mouse_index
-						cursor.length = cursor.drag_from - cursor.index
-					} else {
-						cursor.index = cursor.drag_from
-						cursor.length = mouse_index - cursor.index
-					}
-				}
+			}
+		}
+
+		if IsMouseButtonDown(.LEFT) {
+			if mouse_index < cursor.drag_from {
+				cursor.index = mouse_index
+				cursor.length = cursor.drag_from - cursor.index
+			} else {
+				cursor.index = cursor.drag_from
+				cursor.length = mouse_index - cursor.index
 			}
 		}
 
@@ -440,7 +441,7 @@ slider :: proc(value: ^f32, min, max: f32, opts: Option_Set, loc := #caller_loca
 	draw_control_frame({value_point.x - 10, value_point.y - 10, 20, 20}, 10, style.depth, blend_colors(blend_colors(style.colors[.fill], BLACK, control.hover_time[idx] * 0.1), style.colors[.highlight], control.focus_time[idx]))
 	if .focus in res {
 		hide_cursor = true
-		lock_mouse_to_slider(rect.x + 10, rect.x + 10 + inner_size, baseline)
+		lock_mouse_to_slider(rect.x + 10, rect.x + 11 + inner_size, baseline)
 		value^ = clamp(min + ((f32(GetMouseX()) - (rect.x + 10)) / inner_size) * (max - min), min, max)
 	}
 	return res
