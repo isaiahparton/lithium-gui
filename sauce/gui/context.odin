@@ -47,9 +47,19 @@ Context :: struct {
 	// controls are things you interact with
 	control_count: int,
 	control: #soa[MAX_CONTROLS]Control,
+	// current control state
+	state: struct{
+		idx: int, 
+		id: Id, 
+		rect: Rectangle, 
+		res: Result_Set,
+		parent: int,
+	},
 	// widget are containers
 	widget_count: int,
+	widget_idx: int,
 	widget: #soa[MAX_WIDGETS]Widget,
+	widget_map: map[Id]int,
 	// layout state
 	layout_index: int,
 	layout: #soa[MAX_LAYOUTS]Layout,

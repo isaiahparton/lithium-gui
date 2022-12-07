@@ -7,6 +7,7 @@ main :: proc(){
 	using raylib
 
 	title := "GUI Demo"
+	val := false
 
 	SetConfigFlags({.WINDOW_RESIZABLE, .MSAA_4X_HINT})
 	InitWindow(1000, 800, strings.clone_to_cstring(title))
@@ -27,11 +28,11 @@ main :: proc(){
 
 		push_layout()
 
-		layout_place_at({}, {0, 0, 200, 40}, {})
+		layout_place_at({}, {0, 0, 300, 40}, {})
 		if .change in text_box(&title, {}) {
 			SetWindowTitle(strings.clone_to_cstring(title))
 		}
-		layout_set_size(200, 30)
+		layout_set_size(300, 30)
 		layout_set_side(.bottom)
 
 		text("Corner roundness", .near, .near, {})
@@ -64,16 +65,19 @@ main :: proc(){
 		text(fmt.aprint(ctx.style.outline_thick), .near, .center, {})
 		pop_layout()
 
+		tick_box(&val, "On" if val else "Off", {})
+
 		pop_layout()
 
 		push_layout()
 		layout_set_size(200, 30)
 		layout_set_side(.bottom)
 		layout_place_at({x=1}, {-200, 0, 200, 40}, {})
-		for i in 0..=4 {
+		for i in 0..=15 {
 			ctx.loc_offset = i
 			button(fmt.aprint("button", i), {.in_loop})
 		}
+		ctx.loc_offset = 0;
 		pop_layout()
 
 		end_widget()
