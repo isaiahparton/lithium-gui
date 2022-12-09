@@ -70,9 +70,13 @@ get_loc_id :: proc(loc: runtime.Source_Code_Location) -> Id{
 	return get_id(rawptr(&loc), size_of(loc))
 }
 check_control_clip :: proc(rect: Rectangle) -> bool {
-	return raylib.CheckCollisionRecs(rect, ctx.widget.rect[ctx.widget_count - 1])
+	space := &ctx.widget.space[ctx.widget_idx]
+	widget_rect := ctx.widget.rect[ctx.widget_idx]
+	space.x = max(space.x, (rect.x + ctx.widget.offset[ctx.widget_idx].x - widget_rect.x) + rect.width)
+	space.y = max(space.y, (rect.y + ctx.widget.offset[ctx.widget_idx].y - widget_rect.y) + rect.height)
+	return raylib.CheckCollisionRecs(rect, widget_rect)
 }
-push_control :: proc(id: Id) -> int {
+reserve_control :: proc(id: Id) -> int {
 	using ctx
 	parent_wdg := &widget[widget_count - 1]
 	idx, ok := parent_wdg.contents[id]
@@ -81,6 +85,7 @@ push_control :: proc(id: Id) -> int {
 			if !control.reserved[i] {
 				idx = i
 				control[i] = {}
+				break
 			}
 		}
 	}
@@ -91,23 +96,24 @@ push_control :: proc(id: Id) -> int {
 	control_count += 1
 	return idx
 }
-update_control :: proc(res: ^Result_Set, id: Id, rect: Rectangle, opts: Option_Set) -> int {
+update_control :: proc(opts: Option_Set) {
 	using ctx
+	using state
 	if focus_id == id {
 		if prev_focus_id != id {
-			res^ += {.just_focused}
+			res += {.just_focused}
 		}
-		res^ += {.focus}
+		res += {.focus}
 		if raylib.IsMouseButtonReleased(.LEFT) && (.hold_focus not_in opts) {
-			res^ += {.submit}
+			res += {.submit}
 			focus_id = 0
 		}
 	}
-	if raylib.CheckCollisionPointRec(raylib.GetMousePosition(), rect) {
+	if widget_hover && raylib.CheckCollisionPointRec(raylib.GetMousePosition(), rect) {
 		if prev_hover_id != id {
-			res^ += {.just_hovered}
+			res += {.just_hovered}
 		}
-		res^ += {.hover}
+		res += {.hover}
 		hover_id = id
 	} else if focus_id == id {
 		if (.draggable in opts) {
@@ -118,7 +124,6 @@ update_control :: proc(res: ^Result_Set, id: Id, rect: Rectangle, opts: Option_S
 			focus_id = 0
 		}
 	}
-	return push_control(id)
 }
 
 begin_control :: proc(opts: Option_Set, loc: runtime.Source_Code_Location) -> bool {
@@ -129,7 +134,18 @@ begin_control :: proc(opts: Option_Set, loc: runtime.Source_Code_Location) -> bo
 	}
 	res = {}
 	id = get_loc_id(loc)
-	idx = update_control(&res, id, rect, opts)
+	idx = reserve_control(id)
+	return true
+}
+begin_free_control :: proc(my_rect: Rectangle, opts: Option_Set, loc: runtime.Source_Code_Location) -> bool {
+	using ctx.state
+	rect = my_rect
+	if !check_control_clip(rect) {
+		return false
+	}
+	res = {}
+	id = get_loc_id(loc)
+	idx = reserve_control(id)
 	return true
 }
 begin_static_control :: proc(opts: Option_Set) -> bool {
@@ -145,11 +161,13 @@ end_control :: proc() -> Result_Set {
 	return ctx.state.res
 }
 
-// aligns a rect according to frame
+// get's the next control's rectangle
 get_control_rect :: proc() -> Rectangle {
 	layout := &ctx.layout[ctx.layout_index]
 	if ctx.set_rect {
 		ctx.set_rect = false
+		layout.first_rect.x -= ctx.widget[ctx.widget_idx].offset.x
+		layout.first_rect.y -= ctx.widget[ctx.widget_idx].offset.y
 		return layout.first_rect
 	}
 	spacing := ctx.style.spacing
@@ -183,211 +201,220 @@ draw_control_frame :: proc(rect: Rectangle, radius: f32, depth: f32, fill: Color
 text_box :: proc(content: ^string, opts: Option_Set, loc := #caller_location) -> Result_Set {
 	using ctx
 	using raylib
-	res := Result_Set{}
-	rect := get_control_rect()
-	if !check_control_clip(rect) {
-		return res
-	}
-	layout_set_last(rect)
-	loc := loc
-	id := get_id(rawptr(&loc), size_of(loc))
-	idx := update_control(&res, id, rect, {.hold_focus})
-
-	if .just_focused in res {
-		cursor.index = -1
-		cursor.length = 0
-		clear(&buffer)
-		append_elem_string(&buffer, content^)
-	}
-
-	draw_control_frame(rect, style.corner_radius, 0, blend_colors(style.colors[.fill], BLACK, (control.hover_time[idx] + control.focus_time[idx]) * 0.1))
-
-	font := style.font
-	font_height := f32(font.baseSize)
-	// if data was altered this step
-	changed := false
-	// Draw text to find lines
-	x := rect.x + style.text_padding
-	if .focus in res {
-		x -= text_offset
-	}
-	min_diff := rect.width
-	mouse_index := len(content)
-	y := rect.y + rect.height / 2 - font_height / 2
-	for i := 0; i <= len(content); {
-		bytecount := 1
-		codepoint : rune = 0
-		if i < len(content) {
-			codepoint, bytecount = utf8.decode_rune_in_string(content[i:])
+	if begin_control(opts, loc) {
+		update_control(opts + {.hold_focus})
+		using state
+		if .just_focused in res {
+			cursor.index = -1
+			cursor.length = 0
+			text_offset = 0
+			clear(&buffer)
+			append_elem_string(&buffer, content^)
 		}
-        index := GetGlyphIndex(font, codepoint)
 
-        rune_width := f32(font.chars[index].advanceX) if (font.chars[index].advanceX != 0) else font.recs[index].width + f32(font.chars[index].offsetX)
-        if x + rune_width < rect.x {
-        	i += bytecount
-        	x += rune_width
-        	continue
-        }
+		draw_control_frame(rect, style.corner_radius, 0, blend_colors(style.colors[.fill], BLACK, (control.hover_time[idx] + control.focus_time[idx]) * 0.1))
 
-        diff := abs(f32(GetMouseX()) - x)
-        if diff < min_diff {
-        	min_diff = diff
-        	mouse_index = i
-        }
+		font := style.font
+		font_height := f32(font.baseSize)
+		// if data was altered this step
+		changed := false
+		// Draw text to find lines
+		x := rect.x + style.text_padding
+		max_offset := f32(0)
+		if .focus in res {
+			x -= text_offset
+		}
+		min_diff := rect.width
+		mouse_index := len(content)
+		y := rect.y + rect.height / 2 - font_height / 2
+		for i := 0; i <= len(content); {
+			bytecount := 1
+			codepoint : rune = 0
+			if i < len(content) {
+				codepoint, bytecount = utf8.decode_rune_in_string(content[i:])
+			}
+	        index := GetGlyphIndex(font, codepoint)
 
-        // Draw cursor
-        highlight := false
-        if .focus in res {
-        	if cursor.length == 0 {
-	    		if i == cursor.index {
-	    			h := font_height * (0.5 + abs(math.sin_f32(f32(GetTime() * 7))) * 0.5)
-	    			DrawRectangleRec({x - 1, y + font_height / 2 - h / 2, 2, h}, style.colors[.text])
-	    		}
-	    	} else if i >= cursor.index && i < cursor.index + cursor.length {
-	        	DrawRectangleRec({max(x, rect.x), y, min(rect.width - (x - rect.x), rune_width + 1), font_height}, style.colors[.text])
-	        	highlight = true
+	        rune_width := f32(font.chars[index].advanceX) if (font.chars[index].advanceX != 0) else font.recs[index].width + f32(font.chars[index].offsetX)
+	        if x + rune_width < rect.x {
+	        	i += bytecount
+	        	x += rune_width
+	        	max_offset += rune_width
+	        	continue
 	        }
-        }
 
-        if i == len(content) {
-        	break
-        }
+	        diff := abs(f32(GetMouseX()) - x)
+	        if diff < min_diff {
+	        	min_diff = diff
+	        	mouse_index = i
+	        }
 
-		draw_rune_pro(font, codepoint, {x, y}, {rect.x, rect.y, (rect.x + rect.width) - x, rect.height}, font_height, style.colors[.fill] if highlight else style.colors[.text])
-		x += rune_width
-		i += bytecount
+	        // Draw cursor
+	        highlight := false
+	        if .focus in res {
+	        	if cursor.length == 0 {
+		    		if i == cursor.index {
+		    			h := font_height * (0.5 + abs(math.sin_f32(f32(GetTime() * 7))) * 0.5)
+		    			DrawRectangleRec({x - 1, y + font_height / 2 - h / 2, 2, h}, style.colors[.text])
+		    		}
+		    	} else if i >= cursor.index && i < cursor.index + cursor.length {
+		        	DrawRectangleRec({max(x, rect.x), y, min(rect.width - (x - rect.x), rune_width + 1), font_height}, style.colors[.text])
+		        	highlight = true
+		        }
+	        }
 
-		if x > rect.x + rect.width {
-			break
+	        if i == len(content) {
+	        	break
+	        }
+
+			draw_rune_pro(font, codepoint, {x, y}, {rect.x, rect.y, (rect.x + rect.width) - x, rect.height}, font_height, style.colors[.fill] if highlight else style.colors[.text])
+			x += rune_width
+			i += bytecount
+			max_offset += rune_width
+
+			if x > rect.x + rect.width {
+				break
+			}
 		}
-	}
 
-	if .hover in res {
-		hover_text = true
-	}
-
-	if .focus in res {
 		if .hover in res {
-			if double_click {
-				cursor.index = 0
-				cursor.length = len(content)
-			} else {
-				if IsMouseButtonPressed(.LEFT) && mouse_index != -1 {
-					cursor.drag_from = mouse_index
-				}
-			}
+			hover_text = true
 		}
 
-		if IsMouseButtonDown(.LEFT) {
-			if mouse_index < cursor.drag_from {
-				cursor.index = mouse_index
-				cursor.length = cursor.drag_from - cursor.index
-			} else {
-				cursor.index = cursor.drag_from
-				cursor.length = mouse_index - cursor.index
-			}
-		}
-
-		if get_key_held(.LEFT) {
-			delta := 0
-			if is_ctrl_down() {
-				delta = quick_seek_buffer(&buffer, cursor.index, true) - cursor.index
-			}
-			else{
-				_, delta = utf8.decode_last_rune_in_bytes(buffer[:cursor.index])
-				delta = -delta
-			}
-			if is_shift_down() {
-				cursor.index += delta
-				if cursor.index >= 0 {
-					cursor.length -= delta
-				}
-			} else {
-				if cursor.length == 0 {
-					cursor.index += delta
-				}
-				cursor.length = 0
-			}
-			if cursor.index < 0 do cursor.index = 0
-		}
-		if get_key_held(.RIGHT) {
-			delta := 0
-			if is_ctrl_down() {
-				delta = quick_seek_buffer(&buffer, cursor.index + cursor.length, false) - cursor.index + 1
-			}
-			else{
-				_, delta = utf8.decode_rune_in_bytes(buffer[cursor.index + cursor.length:])
-			}
-			if is_shift_down() {
-				cursor.length += delta
-			} else {
-				if cursor.length > 0 {
-					cursor.index += cursor.length
+		if .focus in res {
+			if .hover in res {
+				if double_click {
+					cursor.index = 0
+					cursor.length = len(content)
 				} else {
-					cursor.index += delta
-				}
-				cursor.length = 0
-			}
-			if cursor.length == 0 {
-				if cursor.index > len(buffer) {
-					cursor.index = len(buffer)
-				}
-			} else {
-				if cursor.index + cursor.length > len(buffer) {
-					cursor.length = len(buffer) - cursor.index
+					if IsMouseButtonPressed(.LEFT) && mouse_index != -1 {
+						cursor.drag_from = mouse_index
+					}
 				}
 			}
-		}
-		if rune_count > 0 {
-			insert_runes_to_buffer(&buffer, runes[0:rune_count])
-			changed = true
-		}
-		if len(buffer) != 0 {
-			at_end := (len(buffer) == cursor.index)
 
-			if get_key_held(.DELETE) && !at_end {
-				erase_from_buffer(&buffer)
-				changed = true
+			if IsMouseButtonDown(.LEFT) {
+				if mouse_index < cursor.drag_from {
+					cursor.index = mouse_index
+					cursor.length = cursor.drag_from - cursor.index
+				} else {
+					cursor.index = cursor.drag_from
+					cursor.length = mouse_index - cursor.index
+				}
+				mouse_x := f32(GetMouseX())
+				if mouse_x < rect.x {
+					text_offset += (mouse_x - rect.x) * 0.01
+				} else if mouse_x > rect.x + rect.width {
+					text_offset += (mouse_x - (rect.x + rect.width)) * 0.01
+				}
 			}
-			else if get_key_held(.BACKSPACE) {
+
+			if get_key_held(.LEFT) {
+				delta := 0
 				if is_ctrl_down() {
-					idx := quick_seek_buffer(&buffer, cursor.index, true)
-					remove_range(&buffer, idx, cursor.index)
-					cursor.index = idx
-				} else {
-					backspace_buffer(&buffer)
+					delta = quick_seek_buffer(&buffer, cursor.index, true) - cursor.index
 				}
+				else{
+					_, delta = utf8.decode_last_rune_in_bytes(buffer[:cursor.index])
+					delta = -delta
+				}
+				if is_shift_down() {
+					cursor.index += delta
+					if cursor.index >= 0 {
+						cursor.length -= delta
+					}
+				} else {
+					if cursor.length == 0 {
+						cursor.index += delta
+					}
+					cursor.length = 0
+				}
+				if cursor.index < 0 do cursor.index = 0
+			}
+			if get_key_held(.RIGHT) {
+				delta := 0
+				if is_ctrl_down() {
+					delta = quick_seek_buffer(&buffer, cursor.index + cursor.length, false) - cursor.index + 1
+				}
+				else{
+					_, delta = utf8.decode_rune_in_bytes(buffer[cursor.index + cursor.length:])
+				}
+				if is_shift_down() {
+					cursor.length += delta
+				} else {
+					if cursor.length > 0 {
+						cursor.index += cursor.length
+					} else {
+						cursor.index += delta
+					}
+					cursor.length = 0
+				}
+				if cursor.length == 0 {
+					if cursor.index > len(buffer) {
+						cursor.index = len(buffer)
+					}
+				} else {
+					if cursor.index + cursor.length > len(buffer) {
+						cursor.length = len(buffer) - cursor.index
+					}
+				}
+			}
+			if rune_count > 0 {
+				insert_runes_to_buffer(&buffer, runes[0:rune_count])
 				changed = true
 			}
-		}
-		if is_ctrl_down() {
-			if IsKeyPressed(.A) {
-				cursor.index = 0
-				cursor.length = len(buffer)
-			}
-			if IsKeyPressed(.V) {
-				str := strings.clone_from_cstring(GetClipboardText())
-				if len(str) > 0 {
-					insert_string_to_buffer(&buffer, str)
+			if len(buffer) != 0 {
+				at_end := (len(buffer) == cursor.index)
+
+				if get_key_held(.DELETE) && !at_end {
+					erase_from_buffer(&buffer)
+					changed = true
+				}
+				else if get_key_held(.BACKSPACE) {
+					if is_ctrl_down() {
+						idx := quick_seek_buffer(&buffer, cursor.index, true)
+						remove_range(&buffer, idx, cursor.index)
+						cursor.index = idx
+					} else {
+						backspace_buffer(&buffer)
+					}
 					changed = true
 				}
 			}
-			if IsKeyPressed(.C) {
-				SetClipboardText(strings.clone_to_cstring(cast(string)buffer[cursor.index:cursor.index + cursor.length]))
+			if is_ctrl_down() {
+				if IsKeyPressed(.A) {
+					cursor.index = 0
+					cursor.length = len(buffer)
+				}
+				if IsKeyPressed(.V) {
+					str := strings.clone_from_cstring(GetClipboardText())
+					if len(str) > 0 {
+						insert_string_to_buffer(&buffer, str)
+						changed = true
+					}
+				}
+				if IsKeyPressed(.C) {
+					SetClipboardText(strings.clone_to_cstring(cast(string)buffer[cursor.index:cursor.index + cursor.length]))
+				}
+				if IsKeyPressed(.X) {
+					SetClipboardText(strings.clone_to_cstring(cast(string)buffer[cursor.index:cursor.index + cursor.length]))
+					erase_from_buffer(&buffer)
+					changed = true
+				}
 			}
-			if IsKeyPressed(.X) {
-				SetClipboardText(strings.clone_to_cstring(cast(string)buffer[cursor.index:cursor.index + cursor.length]))
-				erase_from_buffer(&buffer)
-				changed = true
+			if changed {
+				res += {.change}
+				content^ = strings.clone_from_bytes(buffer[:])
 			}
 		}
-		if changed {
-			res += {.change}
-			content^ = strings.clone_from_bytes(buffer[:])
+
+		if text_offset < 0 {
+			text_offset = 0
+		} else if text_offset > max_offset {
+			text_offset = max_offset
 		}
 	}
-
-	return res
+	return end_control()
 }
 
 // submited when hovered, clicked then released
@@ -395,6 +422,7 @@ button :: proc(title: string, opts: Option_Set, loc := #caller_location) -> Resu
 	using ctx
 	using raylib
 	if begin_control(opts, loc) {
+		update_control(opts)
 		using state
 		offset := style.depth * control.focus_time[idx]
 		my_rect := rect
@@ -415,7 +443,7 @@ tick_box :: proc(value: ^bool, title: string, opts: Option_Set, loc := #caller_l
 		if title != {} {
 			rect.width += measure_string(style.font, title, cast(f32)style.font.baseSize).x + style.spacing
 		}
-		layout_set_last(rect)
+		update_control(opts)
 		state_time := &control.state_time[idx]
 		fill := ColorAlphaBlend(ColorAlphaBlend(style.colors[.fill], style.colors[.highlight], Fade(WHITE, state_time^)), BLACK, Fade(WHITE, (control.hover_time[idx] + control.focus_time[idx]) * 0.1))
 		draw_rounded_rect({rect.x, rect.y, 24, 24}, style.corner_radius, 7, fill)
@@ -427,6 +455,12 @@ tick_box :: proc(value: ^bool, title: string, opts: Option_Set, loc := #caller_l
 			DrawLineEx({rect.x + 9, rect.y + 18}, {rect.x + 9 + (11 * time2), rect.y + 18 - (11 * time2)}, 3.0, style.colors[.outline])
 			state_time^ += (1.0 - state_time^) * 15 * GetFrameTime()
 		} else {
+			if (state_time^ > 0.01) {
+				time2 := min(state_time^, 0.5) * 2
+				time1 := max(min(state_time^ - 0.5, 0.5), 0.0) * 2
+				DrawLineEx({rect.x + 10, rect.y + 18}, {rect.x + 10 - (6 * time1), rect.y + 18 - (6 * time1)}, 3.0, style.colors[.outline])
+				DrawLineEx({rect.x + 20, rect.y + 7}, {rect.x + 20 - (11 * time2), rect.y + 7 + (11 * time2)}, 3.0, style.colors[.outline])
+			}
 			state_time^ -= state_time^ * 15 * GetFrameTime()
 		}
 		draw_aligned_string(style.font, title, {rect.x + rect.width, rect.y + rect.height / 2}, cast(f32)style.font.baseSize, style.colors[.text], .far, .center)
@@ -456,6 +490,7 @@ slider :: proc(value: ^f32, min, max: f32, opts: Option_Set, loc := #caller_loca
 	if begin_control(opts, loc){
 		using state
 		rect.height = 20
+		update_control(opts)
 		baseline := rect.y + 10
 		draw_rounded_rect_lines({rect.x, baseline - 5, rect.width, 10}, 5, 7, style.outline_thick, style.colors[.outline])
 		inner_size := rect.width - 20
@@ -485,18 +520,24 @@ range_slider :: proc(low, high: ^f32, min, max: f32, opts: Option_Set, loc := #c
 	inner_size := rect.width - 20
 
 	low_point := Vector2{rect.x + 10 + inner_size * (low^ / (max - min)), baseline}
-	low_knob := Result_Set{}
-	low_id := get_id(rawptr(&loc), size_of(loc))
-	low_idx := update_control(&low_knob, low_id, {low_point.x - 10, low_point.y - 10, 20, 20}, {.draggable})
 	high_point := Vector2{rect.x + 10 + inner_size * (high^ / (max - min)), baseline}
-	high_knob := Result_Set{}
-	loc.column += 1
-	high_id := get_id(rawptr(&loc), size_of(loc))
-	high_idx := update_control(&high_knob, high_id, {high_point.x - 10, high_point.y - 10, 20, 20}, {.draggable})
-
 	DrawRectangleRec({low_point.x, baseline - 5, (high_point.x - low_point.x), 10}, style.colors[.highlight])
-	draw_control_frame({low_point.x - 10, low_point.y - 10, 20, 20}, 10, style.depth, blend_colors(blend_colors(style.colors[.fill], BLACK, control.hover_time[low_idx] * 0.1), style.colors[.highlight], control.focus_time[low_idx]))
-	draw_control_frame({high_point.x - 10, high_point.y - 10, 20, 20}, 10, style.depth, blend_colors(blend_colors(style.colors[.fill], BLACK, control.hover_time[high_idx] * 0.1), style.colors[.highlight], control.focus_time[high_idx]))
+	low_rect := Rectangle{low_point.x - 10, low_point.y - 10, 20, 20}
+	if begin_free_control(low_rect, opts + {.draggable}, loc) {
+		using state
+		draw_control_frame(rect, 10, style.depth, blend_colors(blend_colors(style.colors[.fill], BLACK, control.hover_time[idx] * 0.1), style.colors[.highlight], control.focus_time[idx]))
+	}
+	low_knob := end_control()
+
+	loc.column += 1
+
+	high_rect := Rectangle{high_point.x - 10, high_point.y - 10, 20, 20}
+	if begin_free_control(high_rect, opts + {.draggable}, loc) {
+		using state
+		draw_control_frame(rect, 10, style.depth, blend_colors(blend_colors(style.colors[.fill], BLACK, control.hover_time[idx] * 0.1), style.colors[.highlight], control.focus_time[idx]))
+	}
+	high_knob := Result_Set{}
+
 	if .focus in low_knob {
 		low^ = clamp(min + ((f32(GetMouseX()) - (rect.x + 10)) / inner_size) * (max - min), min, high^)
 	}
@@ -509,6 +550,7 @@ range_slider :: proc(low, high: ^f32, min, max: f32, opts: Option_Set, loc := #c
 text :: proc(text: string, align_x, align_y: Alignment, opts: Option_Set){
 	using ctx
 	using raylib
+	size := [2]f32{}
 	if begin_static_control(opts) {
 		using state
 		origin := [2]f32{rect.x, rect.y}
@@ -522,13 +564,16 @@ text :: proc(text: string, align_x, align_y: Alignment, opts: Option_Set){
 		} else if align_y == .far {
 			origin.y += rect.height
 		}
-		size := draw_aligned_string(style.font, text, origin, cast(f32)style.font.baseSize, style.colors[.text], align_x, align_y)
-		side := layout[layout_index].side
-		if side == .bottom || side == .top {
-			rect.height = size.y
-		} else if side == .left || side == .right {
-			rect.width = size.x
-		}
+		size = draw_aligned_string(style.font, text, origin, cast(f32)style.font.baseSize, style.colors[.text], align_x, align_y)
+		
+	} else {
+		size = measure_string(style.font, text, cast(f32)style.font.baseSize)
+	}
+	side := layout[layout_index].side
+	if side == .bottom || side == .top {
+		state.rect.height = size.y
+	} else if side == .left || side == .right {
+		state.rect.width = size.x
 	}
 	layout_set_last(ctx.state.rect)
 }

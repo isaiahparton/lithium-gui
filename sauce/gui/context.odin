@@ -40,6 +40,9 @@ KEY_HOLD_DELAY :: 0.5
 KEY_HOLD_PULSE :: 0.025
 DOUBLE_CLICK_TIME :: 0.275
 Context :: struct {
+	// input
+	mouse_point: [2]f32,
+	// uh
 	hover_id, prev_hover_id, focus_id, prev_focus_id: Id,
 	click, double_click: bool,
 	double_click_timer: f32,
@@ -56,10 +59,11 @@ Context :: struct {
 		parent: int,
 	},
 	// widget are containers
-	widget_count: int,
-	widget_idx: int,
+	widget_hover: bool,
+	widget_count, widget_idx: int,
 	widget: #soa[MAX_WIDGETS]Widget,
 	widget_map: map[Id]int,
+	drag_from: [2]f32,
 	// layout state
 	layout_index: int,
 	layout: #soa[MAX_LAYOUTS]Layout,
@@ -84,13 +88,21 @@ Context :: struct {
 	// icon atlas
 	icon_atlas: raylib.Texture,
 	icon_cols: int,
+	panel_tex: raylib.RenderTexture,
+	tex_offset: [2]f32,
+	max_panel_height: f32,
 }
 ctx : Context = {}
 
+uninit_context :: proc(){
+	using ctx
+	raylib.UnloadRenderTexture(panel_tex)
+}
 init_context :: proc(){
 	using ctx
 	init_default_style()
 	{
+		panel_tex = raylib.LoadRenderTexture(4096, 4096)
 		icon_atlas = raylib.LoadTexture("./icons/atlas.png")
 		icon_cols = cast(int)icon_atlas.width / style.icon_size
 	}
@@ -121,6 +133,7 @@ begin :: proc(){
 
 	hide_cursor = false
 	layout_index = -1
+	loc_offset = 0
 
 	rune_count = 0
 	rn := GetCharPressed()
@@ -216,6 +229,17 @@ end :: proc(){
 	} else {
 		SetMouseCursor(.DEFAULT)
 	}
+
+	for i := 0; i < MAX_WIDGETS; i += 1 {
+		if !widget.reserved[i] {
+			continue
+		}
+		rect := &widget.rect[i]
+		offset := &widget.tex_offset[i]
+		draw_shadow(rect^, style.corner_radius * 2, 24, {0, 0, 0, 50})
+		draw_render_surface(panel_tex, {offset.x, offset.y, rect.width, rect.height}, rect^, WHITE)
+	}
+	widget_count = 0
 }
 
 is_ctrl_down :: proc() -> bool {

@@ -26,6 +26,65 @@ draw_icon :: proc(origin: [2]f32, icon: Icon, align_x, align_y: Alignment, tint:
     raylib.DrawTexturePro(icon_atlas, {f32(int(icon) % icon_cols) * size, f32(int(icon) / icon_cols) * size, size, size}, {origin.x, origin.y, size, size}, {0, 0}, 0, tint)
 }
 
+draw_circle_gradient :: proc(x, y, radius, start, end: f32, color1, color2: Color) {
+    using raylib
+    rlBegin(RL_TRIANGLES)
+    for i := start; i < end; i += 10 {
+        rlColor4ub(color1.r, color1.g, color1.b, color1.a)
+        rlVertex2f(x, y)
+        rlColor4ub(color2.r, color2.g, color2.b, color2.a)
+        rlVertex2f(x + math.sin(DEG2RAD * i) * radius, y + math.cos(DEG2RAD * i) * radius)
+        rlColor4ub(color2.r, color2.g, color2.b, color2.a)
+        rlVertex2f(x + math.sin(DEG2RAD * (i + 10)) * radius, y + math.cos(DEG2RAD * (i + 10)) * radius)
+    }
+    rlEnd()
+}
+
+draw_shadow :: proc(rect: Rectangle, radius, scale: f32, color: Color) {
+    using raylib
+    size := radius + scale
+    draw_circle_gradient(rect.x + radius, rect.y + radius, size, 180.0, 270.0, color, BLANK)
+    draw_circle_gradient(rect.x + radius, rect.y + rect.height - radius, size, 270.0, 360.0, color, BLANK)
+    draw_circle_gradient(rect.x + rect.width - radius, rect.y + radius, size, 90.0, 180.0, color, BLANK)
+    draw_circle_gradient(rect.x + rect.width - radius, rect.y + rect.height - radius, size, 0.0, 90.0, color, BLANK)
+    DrawRectangleGradientH(
+        i32(rect.x + radius - size), 
+        i32(rect.y + radius), 
+        i32(size), 
+        i32(rect.height - (radius * 2)), 
+        BLANK, 
+        color,
+    )
+    DrawRectangleGradientH(
+        i32(rect.x + rect.width - radius), 
+        i32(rect.y + radius), 
+        i32(size), 
+        i32(rect.height - (radius * 2)), 
+        color, 
+        BLANK,
+    )
+    DrawRectangleGradientV(
+        i32(rect.x + radius), 
+        i32(rect.y + radius - size), 
+        i32(rect.width - (radius * 2)), 
+        i32(size), 
+        BLANK, 
+        color,
+    )
+    DrawRectangleGradientV(
+        i32(rect.x + radius), 
+        i32(rect.y + rect.height - radius), 
+        i32(rect.width - (radius * 2)), 
+        i32(size), 
+        color, 
+        BLANK,
+    )
+}
+
+draw_render_surface :: proc(surf: raylib.RenderTexture, src, dst: Rectangle, tint: Color) {
+    raylib.DrawTexturePro(surf.texture, { src.x, -src.y - src.height, src.width, -src.height }, dst, { 0, 0 }, 0, tint)
+}
+
 blend_colors :: proc(dst: Color, src: Color, val: f32) -> Color{
     return raylib.ColorAlphaBlend(dst, src, raylib.Fade(raylib.WHITE, val))
 }
