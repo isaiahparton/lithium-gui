@@ -77,7 +77,6 @@ end_widget :: proc(){
 	offset_target := &widget.offset_target[widget_idx]
 	offset^ += (offset_target^ - offset^) * 20 * raylib.GetFrameTime()
 	if widget_hover {
-		widget_hover = true
 		delta := raylib.GetMouseWheelMove() * 77
 		if raylib.IsKeyDown(.LEFT_SHIFT) {
 			offset_target.x -= delta

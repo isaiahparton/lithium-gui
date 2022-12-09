@@ -1,6 +1,11 @@
 package gui
 import "vendor:raylib"
 import "core:strings"
+import "core:fmt"
+
+count_noun :: proc(count: int, noun: string) -> string {
+    return fmt.aprintf("%i %s%s", count, noun, "" if count == 1 else "s")
+}
 
 TEXT_SPACING :: 1
 get_rune :: proc(text: string, byte_count: ^int) -> rune {

@@ -20,20 +20,26 @@ push_layout :: proc(){
 	using ctx
 	layout_index += 1
 	assert(layout_index < MAX_LAYOUTS, "uh...")
-	layout[layout_index] = {}
+	layout[layout_index] = {spacing=style.spacing}
 }
 push_attached_layout :: proc(side: Rect_Side){
 	using ctx
 	assert(layout_index >= 0)
 	push_layout()
-	layout_set_side(side)
-	layout[layout_index].last_rect = layout[layout_index - 1].last_rect
+	layout[layout_index] = layout[layout_index - 1]
+	layout[layout_index].side = side
 }
 pop_layout :: proc(){
 	using ctx
 	layout_index -= 1
 }
 
+layout_set_spacing :: proc(spacing: f32){
+	ctx.layout[ctx.layout_index].spacing = spacing
+}
+layout_reset_spacing :: proc(){
+	layout_set_spacing(ctx.style.spacing)
+}
 layout_set_size :: proc(width, height: f32){
 	ctx.layout[ctx.layout_index].size = {width, height}
 }
@@ -50,6 +56,7 @@ layout_place_at :: proc(relative: Rectangle, absolute: Rectangle, opts: Option_S
 		inner_rect.height * relative.height + absolute.height,
 	}
 	set_rect = true
+	ctx.layout[ctx.layout_index].size = {rect.width, rect.height}
 	ctx.layout[ctx.layout_index].first_rect = rect
 }
 layout_set_last :: proc(rect: Rectangle){

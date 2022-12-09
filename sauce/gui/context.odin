@@ -19,6 +19,7 @@ ColorIndex :: enum {
 	background,
 	foreground,
 	accent,
+	backing,
 	fill,
 	outline,
 	highlight,
@@ -26,8 +27,9 @@ ColorIndex :: enum {
 }
 Style :: struct {
 	font: Font,
-	corner_radius, padding, spacing, text_padding, outline_thick, depth: f32,
+	corner_radius, padding, spacing, text_padding, outline_thick: f32,
 	icon_size: int,
+	corner_verts: int,
 	colors: [ColorIndex]Color,
 }
 Cursor :: struct{
@@ -51,7 +53,7 @@ Context :: struct {
 	control_count: int,
 	control: #soa[MAX_CONTROLS]Control,
 	// current control state
-	state: struct{
+	control_state: struct{
 		idx: int, 
 		id: Id, 
 		rect: Rectangle, 
@@ -65,6 +67,12 @@ Context :: struct {
 	widget: #soa[MAX_WIDGETS]Widget,
 	widget_map: map[Id]int,
 	drag_from: [2]f32,
+	widget_state: struct{
+		idx: int,
+		hover: bool,
+		drag_from: [2]f32,
+
+	},
 	// layout state
 	layout_index: int,
 	layout: #soa[MAX_LAYOUTS]Layout,
@@ -75,6 +83,7 @@ Context :: struct {
 	hover_text: bool,
 	text_offset: f32,
 	text_offset_trg: f32,
+	cursor_move: int,
 	// key input
 	first_key, prev_first_key: KeyboardKey,
 	key_hold_timer, key_pulse_timer: f32,
@@ -112,6 +121,7 @@ init_context :: proc(){
 init_default_style :: proc(){
 	using ctx.style
 	colors[.fill] = {255, 255, 255, 255}
+	colors[.backing] = {180, 180, 180, 255}
 	colors[.outline] = {0, 0, 0, 255}
 	colors[.highlight] = {252, 190, 17, 255}
 	colors[.foreground] = {202, 243, 237, 255}
@@ -119,14 +129,14 @@ init_default_style :: proc(){
 	colors[.text] = {0, 0, 0, 255}
 	colors[.accent] = {17, 173, 163, 255}
 	text_padding = 6
-	outline_thick = 2
+	outline_thick = 1.1
 	padding = 8
-	spacing = 8
-	corner_radius = 0
-	depth = 0
+	spacing = 14
+	corner_radius = 2
+	corner_verts = 5
 	icon_size = 24
 	font = raylib.LoadFontEx("./fonts/Muli-SemiBold.ttf", 26, nil, 1024)
-	raylib.SetTextureFilter(font.texture, .BILINEAR)
+	//raylib.SetTextureFilter(font.texture, .BILINEAR)
 }
 
 begin :: proc(){
