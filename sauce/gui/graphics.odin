@@ -82,7 +82,7 @@ draw_shadow :: proc(rect: Rectangle, radius, scale: f32, color: Color) {
 }
 
 draw_render_surface :: proc(surf: raylib.RenderTexture, src, dst: Rectangle, tint: Color) {
-    raylib.DrawTexturePro(surf.texture, { src.x, -src.y - src.height, src.width, -src.height }, dst, { 0, 0 }, 0, tint)
+    raylib.DrawTexturePro(surf.texture, { src.x, -src.y - src.height, src.width, -src.height }, dst, { 0, 0 }, -0.01, tint)
 }
 
 blend_colors :: proc(dst: Color, src: Color, val: f32) -> Color{

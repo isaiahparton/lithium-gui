@@ -9,6 +9,7 @@ main :: proc(){
 	frame := 0
 	title := "Glory to God in the highest, and on earth peace, goodwill toward men"
 	val := false
+	vals := [77]f32{}
 
 	SetConfigFlags({.WINDOW_RESIZABLE, .MSAA_4X_HINT})
 	InitWindow(1000, 800, strings.clone_to_cstring(title))
@@ -44,22 +45,6 @@ main :: proc(){
 			}
 
 			pop_layout()
-
-			end_widget()
-		}
-
-		if begin_widget({50, 50, 400, 400}) {
-			
-			push_layout()
-			layout_set_size(200, 30)
-			layout_set_side(.bottom)
-			layout_place_at({}, {0, 0, 200, 40}, {})
-			for elem in ctx.widget[0].contents {
-				ctx.loc_offset += 1
-				text(fmt.aprint(elem, ctx.widget[0].contents[elem]), .near, .near, {})
-			}
-			pop_layout()
-
 			end_widget()
 		}
 

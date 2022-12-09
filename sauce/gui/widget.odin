@@ -12,8 +12,11 @@ Widget :: struct {
 
 begin_widget :: proc(rect: Rectangle, loc := #caller_location) -> bool {
 	using ctx
+
+	//--- hash the caller location and lookup ---//
 	id := get_loc_id(loc)
 	idx, ok := widget_map[id]
+	//--- if none is found reserve one ---//
 	if !ok {
 		for i := 0; i < MAX_WIDGETS; i += 1 {
 			if !widget.reserved[i] {
@@ -26,6 +29,7 @@ begin_widget :: proc(rect: Rectangle, loc := #caller_location) -> bool {
 			}
 		}
 	}
+	//--- update widget data ---//
 	widget_idx = idx
 	widget_map[id] = idx
 	widget.reserved[idx] = true
@@ -40,6 +44,7 @@ begin_widget :: proc(rect: Rectangle, loc := #caller_location) -> bool {
 	widget_hover = raylib.CheckCollisionPointRec(raylib.GetMousePosition(), rect)
 	widget.space[idx] = {rect.width, rect.height}
 
+	//--- setup surface area for drawing ---//
 	raylib.BeginTextureMode(panel_tex)
 	if widget_count == 1 {
 		raylib.ClearBackground({})
@@ -67,6 +72,7 @@ end_widget :: proc(){
 	raylib.rlPopMatrix()
 	raylib.EndTextureMode()
 
+	//--- update scrolling/panning ---//
 	offset := &widget.offset[widget_idx]
 	offset_target := &widget.offset_target[widget_idx]
 	offset^ += (offset_target^ - offset^) * 20 * raylib.GetFrameTime()
@@ -92,6 +98,7 @@ end_widget :: proc(){
 	offset_target.x = clamp(offset_target.x, 0, widget.space[widget_idx].x - widget.rect[widget_idx].width)
 	offset_target.y = clamp(offset_target.y, 0, widget.space[widget_idx].y - widget.inner_rect[widget_idx].height)
 
+	//--- delete entries for controls that don't exist ---//
 	contents := &widget[widget_idx].contents
 	for id, idx in contents {
 		if !control.exists[idx] {

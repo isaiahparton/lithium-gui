@@ -78,9 +78,12 @@ check_control_clip :: proc(rect: Rectangle) -> bool {
 }
 reserve_control :: proc(id: Id) -> int {
 	using ctx
+	//--- lookup control in parent widget by id ---//
 	parent_wdg := &widget[widget_count - 1]
 	idx, ok := parent_wdg.contents[id]
+	//--- if not found, reserve a new one ---//
 	if !ok {
+		idx = -1
 		for i := 0; i < MAX_CONTROLS; i += 1 {
 			if !control.reserved[i] {
 				idx = i
@@ -88,8 +91,11 @@ reserve_control :: proc(id: Id) -> int {
 				break
 			}
 		}
+		if idx < 0 {
+			return idx
+		}
+		parent_wdg.contents[id] = idx
 	}
-	parent_wdg.contents[id] = idx
 	control[idx].id = id
 	control[idx].exists = true
 	control[idx].reserved = true
@@ -135,7 +141,7 @@ begin_control :: proc(opts: Option_Set, loc: runtime.Source_Code_Location) -> bo
 	res = {}
 	id = get_loc_id(loc)
 	idx = reserve_control(id)
-	return true
+	return !(idx < 0)
 }
 begin_free_control :: proc(my_rect: Rectangle, opts: Option_Set, loc: runtime.Source_Code_Location) -> bool {
 	using ctx.state
@@ -221,6 +227,7 @@ text_box :: proc(content: ^string, opts: Option_Set, loc := #caller_location) ->
 		// Draw text to find lines
 		x := rect.x + style.text_padding
 		max_offset := f32(0)
+		cursor_min_x, cursor_max_x := f32(0), f32(0)
 		if .focus in res {
 			x -= text_offset
 		}
@@ -236,6 +243,11 @@ text_box :: proc(content: ^string, opts: Option_Set, loc := #caller_location) ->
 	        index := GetGlyphIndex(font, codepoint)
 
 	        rune_width := f32(font.chars[index].advanceX) if (font.chars[index].advanceX != 0) else font.recs[index].width + f32(font.chars[index].offsetX)
+	        if i == cursor.index {
+	        	cursor_min_x, cursor_max_x = max_offset, max_offset
+	        } else if i == cursor.index + cursor.length {
+	        	cursor_max_x = max_offset
+	        }
 	        if x + rune_width < rect.x {
 	        	i += bytecount
 	        	x += rune_width
@@ -249,10 +261,12 @@ text_box :: proc(content: ^string, opts: Option_Set, loc := #caller_location) ->
 	        	mouse_index = i
 	        }
 
+	        max_offset += rune_width
+
 	        // Draw cursor
 	        highlight := false
 	        if .focus in res {
-	        	if cursor.length == 0 {
+	        	if cursor.length == 0 && x > rect.x && x < rect.x + rect.width {
 		    		if i == cursor.index {
 		    			h := font_height * (0.5 + abs(math.sin_f32(f32(GetTime() * 7))) * 0.5)
 		    			DrawRectangleRec({x - 1, y + font_height / 2 - h / 2, 2, h}, style.colors[.text])
@@ -261,20 +275,21 @@ text_box :: proc(content: ^string, opts: Option_Set, loc := #caller_location) ->
 		        	DrawRectangleRec({max(x, rect.x), y, min(rect.width - (x - rect.x), rune_width + 1), font_height}, style.colors[.text])
 		        	highlight = true
 		        }
+	        } else {
+	        	if x > rect.x + rect.width {
+					break
+				}
 	        }
 
 	        if i == len(content) {
 	        	break
 	        }
 
-			draw_rune_pro(font, codepoint, {x, y}, {rect.x, rect.y, (rect.x + rect.width) - x, rect.height}, font_height, style.colors[.fill] if highlight else style.colors[.text])
+	        if x < rect.x + rect.width {
+				draw_rune_pro(font, codepoint, {x, y}, {rect.x, rect.y, (rect.x + rect.width) - x, rect.height}, font_height, style.colors[.fill] if highlight else style.colors[.text])
+	        }
 			x += rune_width
 			i += bytecount
-			max_offset += rune_width
-
-			if x > rect.x + rect.width {
-				break
-			}
 		}
 
 		if .hover in res {
@@ -304,12 +319,15 @@ text_box :: proc(content: ^string, opts: Option_Set, loc := #caller_location) ->
 				mouse_x := f32(GetMouseX())
 				if mouse_x < rect.x {
 					text_offset += (mouse_x - rect.x) * 0.01
+					text_offset_trg = text_offset
 				} else if mouse_x > rect.x + rect.width {
 					text_offset += (mouse_x - (rect.x + rect.width)) * 0.01
+					text_offset_trg = text_offset
 				}
 			}
-
+			cursor_move := 0
 			if get_key_held(.LEFT) {
+				cursor_move = -1
 				delta := 0
 				if is_ctrl_down() {
 					delta = quick_seek_buffer(&buffer, cursor.index, true) - cursor.index
@@ -332,6 +350,7 @@ text_box :: proc(content: ^string, opts: Option_Set, loc := #caller_location) ->
 				if cursor.index < 0 do cursor.index = 0
 			}
 			if get_key_held(.RIGHT) {
+				cursor_move = 1
 				delta := 0
 				if is_ctrl_down() {
 					delta = quick_seek_buffer(&buffer, cursor.index + cursor.length, false) - cursor.index + 1
@@ -362,6 +381,7 @@ text_box :: proc(content: ^string, opts: Option_Set, loc := #caller_location) ->
 			if rune_count > 0 {
 				insert_runes_to_buffer(&buffer, runes[0:rune_count])
 				changed = true
+				cursor_move = 1
 			}
 			if len(buffer) != 0 {
 				at_end := (len(buffer) == cursor.index)
@@ -369,6 +389,7 @@ text_box :: proc(content: ^string, opts: Option_Set, loc := #caller_location) ->
 				if get_key_held(.DELETE) && !at_end {
 					erase_from_buffer(&buffer)
 					changed = true
+					cursor_move = -1
 				}
 				else if get_key_held(.BACKSPACE) {
 					if is_ctrl_down() {
@@ -379,6 +400,7 @@ text_box :: proc(content: ^string, opts: Option_Set, loc := #caller_location) ->
 						backspace_buffer(&buffer)
 					}
 					changed = true
+					cursor_move = -1
 				}
 			}
 			if is_ctrl_down() {
@@ -391,6 +413,7 @@ text_box :: proc(content: ^string, opts: Option_Set, loc := #caller_location) ->
 					if len(str) > 0 {
 						insert_string_to_buffer(&buffer, str)
 						changed = true
+						cursor_move = 1
 					}
 				}
 				if IsKeyPressed(.C) {
@@ -400,18 +423,28 @@ text_box :: proc(content: ^string, opts: Option_Set, loc := #caller_location) ->
 					SetClipboardText(strings.clone_to_cstring(cast(string)buffer[cursor.index:cursor.index + cursor.length]))
 					erase_from_buffer(&buffer)
 					changed = true
+					cursor_move = -1
 				}
 			}
 			if changed {
 				res += {.change}
 				content^ = strings.clone_from_bytes(buffer[:])
 			}
+			if cursor_move > 0 {
+				if cursor_max_x > text_offset + rect.width / 2 {
+					text_offset_trg = cursor_max_x - rect.width / 2
+				}
+			} else if cursor_move < 0 {
+				if cursor_min_x < text_offset + style.text_padding {
+					text_offset_trg = cursor_min_x - style.text_padding
+				}
+			}
 		}
-
+		text_offset += (text_offset_trg - text_offset) * 16 * GetFrameTime()
 		if text_offset < 0 {
 			text_offset = 0
-		} else if text_offset > max_offset {
-			text_offset = max_offset
+		} else if text_offset + rect.width / 2 > max_offset {
+			text_offset = max_offset - rect.width / 2
 		}
 	}
 	return end_control()

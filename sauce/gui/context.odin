@@ -59,6 +59,7 @@ Context :: struct {
 		parent: int,
 	},
 	// widget are containers
+	hovered_widget: int,
 	widget_hover: bool,
 	widget_count, widget_idx: int,
 	widget: #soa[MAX_WIDGETS]Widget,
@@ -73,6 +74,7 @@ Context :: struct {
 	cursor: Cursor,
 	hover_text: bool,
 	text_offset: f32,
+	text_offset_trg: f32,
 	// key input
 	first_key, prev_first_key: KeyboardKey,
 	key_hold_timer, key_pulse_timer: f32,
@@ -118,10 +120,10 @@ init_default_style :: proc(){
 	colors[.accent] = {17, 173, 163, 255}
 	text_padding = 6
 	outline_thick = 2
-	padding = 21
-	spacing = 14
-	corner_radius = 8
-	depth = 3
+	padding = 8
+	spacing = 8
+	corner_radius = 0
+	depth = 0
 	icon_size = 24
 	font = raylib.LoadFontEx("./fonts/Muli-SemiBold.ttf", 26, nil, 1024)
 	raylib.SetTextureFilter(font.texture, .BILINEAR)
@@ -134,6 +136,7 @@ begin :: proc(){
 	hide_cursor = false
 	layout_index = -1
 	loc_offset = 0
+	hovered_widget = -1
 
 	rune_count = 0
 	rn := GetCharPressed()
