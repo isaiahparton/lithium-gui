@@ -29,7 +29,6 @@ Style :: struct {
 	font: Font,
 	corner_radius, padding, spacing, text_padding, outline_thick: f32,
 	icon_size: int,
-	corner_verts: int,
 	colors: [ColorIndex]Color,
 }
 Cursor :: struct{
@@ -120,23 +119,22 @@ init_context :: proc(){
 }
 init_default_style :: proc(){
 	using ctx.style
-	colors[.fill] = {255, 255, 255, 255}
+	colors[.fill] = {230, 230, 230, 255}
 	colors[.backing] = {180, 180, 180, 255}
 	colors[.outline] = {0, 0, 0, 255}
-	colors[.highlight] = {252, 190, 17, 255}
-	colors[.foreground] = {202, 243, 237, 255}
-	colors[.background] = {255, 255, 255, 255}
+	colors[.highlight] = {50, 50, 50, 255}
+	colors[.foreground] = {255, 255, 255, 255}
+	colors[.background] = {202, 243, 237, 255}
 	colors[.text] = {0, 0, 0, 255}
 	colors[.accent] = {17, 173, 163, 255}
 	text_padding = 6
 	outline_thick = 1.1
 	padding = 8
 	spacing = 14
-	corner_radius = 2
-	corner_verts = 5
+	corner_radius = 5
 	icon_size = 24
 	font = raylib.LoadFontEx("./fonts/Muli-SemiBold.ttf", 26, nil, 1024)
-	//raylib.SetTextureFilter(font.texture, .BILINEAR)
+	raylib.SetTextureFilter(font.texture, .BILINEAR)
 }
 
 begin :: proc(){

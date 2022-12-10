@@ -6,6 +6,9 @@ import "core:unicode/utf8"
 import "core:math"
 import "core:runtime"
 
+MAX_CONTROLS :: 128
+CORNER_VERTS :: 4
+
 Option :: enum {
 	disabled,
 	highlighted,
@@ -25,7 +28,6 @@ Result :: enum {
 }
 Result_Set :: bit_set[Result;u8]
 
-MAX_CONTROLS :: 128
 Control :: struct {
 	exists, reserved, disabled, state: bool,
 	id: Id,
@@ -197,11 +199,11 @@ get_control_rect :: proc() -> Rectangle {
 draw_control_frame :: proc(rect: Rectangle, radius: f32, fill: Color){
 	using ctx
 	using raylib
-	draw_rounded_rect(rect, radius, style.corner_verts, fill)
+	draw_rounded_rect(rect, radius, CORNER_VERTS, fill)
 }
 
 // text input
-text_box :: proc(content: ^string, opts: Option_Set, loc := #caller_location) -> Result_Set {
+text_box :: proc(content: ^string, label: string, opts: Option_Set, loc := #caller_location) -> Result_Set {
 	using ctx
 	using raylib
 	if begin_control(opts, loc) {
@@ -216,15 +218,28 @@ text_box :: proc(content: ^string, opts: Option_Set, loc := #caller_location) ->
 			append_elem_string(&buffer, content^)
 		}
 
-		draw_control_frame(rect, style.corner_radius, blend_colors(style.colors[.fill], BLACK, (control.hover_time[idx] + control.focus_time[idx]) * 0.1))
-		
-		text_offset += (text_offset_trg - text_offset) * 20 * GetFrameTime()
-
 		font := style.font
 		font_height := f32(font.baseSize)
+		focus_time := control.focus_time[idx]
+		fill := blend_colors(style.colors[.fill], BLACK, min(1, control.hover_time[idx] + focus_time) * 0.1)
+		draw_rounded_rect_pro(rect, {style.corner_radius, style.corner_radius, 0, 0}, CORNER_VERTS, fill)
+		DrawRectangleRec({rect.x, rect.y + rect.height - 2, rect.width, 2}, style.colors[.accent])
+		size := rect.width * focus_time
+		DrawRectangleRec({rect.x + rect.width / 2 - size / 2, rect.y + rect.height - 2, size, 2}, blend_colors(style.colors[.accent], style.colors[.text], focus_time))
+		if len(content) == 0 {
+			draw_aligned_string(font, label, {rect.x + style.text_padding, rect.y + style.text_padding + (rect.height / 2 - font_height / 2 - style.text_padding) * (1 - focus_time)}, cast(f32)style.font.baseSize * (1 - focus_time * 0.35), Fade(BLACK, 0.5), .near, .near)
+		} else {
+			draw_aligned_string(font, label, {rect.x + style.text_padding, rect.y + style.text_padding}, cast(f32)style.font.baseSize * 0.65, Fade(BLACK, 0.5), .near, .near)
+		}
+		
+		if .focus in res {
+			text_offset += (text_offset_trg - text_offset) * 20 * GetFrameTime()
+		}
+
 		// if data was altered this step
 		changed := false
 		// Draw text to find lines
+		y := rect.y + rect.height - style.text_padding - font_height
 		x := rect.x + style.text_padding
 		max_offset := f32(0)
 		cursor_min_x, cursor_max_x := f32(0), f32(0)
@@ -233,7 +248,6 @@ text_box :: proc(content: ^string, opts: Option_Set, loc := #caller_location) ->
 		}
 		min_diff := rect.width
 		mouse_index := len(content)
-		y := rect.y + rect.height / 2 - font_height / 2
 		for i := 0; i <= len(content); {
 			bytecount := 1
 			codepoint : rune = 0
@@ -460,8 +474,8 @@ button :: proc(title: string, opts: Option_Set, loc := #caller_location) -> Resu
 	if begin_control(opts, loc) {
 		using control_state
 		update_control(opts)
-		draw_control_frame(rect, style.corner_radius, blend_colors(blend_colors(style.colors[.fill], BLACK, control.hover_time[idx] * 0.1), style.colors[.highlight], control.focus_time[idx]))
-		draw_aligned_string(style.font, title, {rect.x + rect.width / 2, rect.y + rect.height / 2}, cast(f32)style.font.baseSize, style.colors[.text], .center, .center)
+		draw_control_frame(rect, style.corner_radius, blend_colors(style.colors[.highlight], WHITE, (control.hover_time[idx] + control.focus_time[idx]) * 0.1))
+		draw_aligned_string(style.font, title, {rect.x + rect.width / 2, rect.y + rect.height / 2}, cast(f32)style.font.baseSize, style.colors[.foreground], .center, .center)
 	}
 	return end_control()
 }
@@ -481,9 +495,12 @@ checkbox :: proc(value: ^bool, title: string, opts: Option_Set, loc := #caller_l
 		}
 		update_control(opts)
 		state_time := &control.state_time[idx]
-		fill := ColorAlphaBlend(Fade(style.colors[.text], state_time^), BLACK, Fade(WHITE, (control.hover_time[idx] + control.focus_time[idx]) * 0.1))
+		center := Vector2{rect.x + HALF_CHECKBOX_SIZE, rect.y + HALF_CHECKBOX_SIZE}
+		DrawCircleV(center, 18, Fade(BLACK, control.hover_time[idx] * 0.1))
+		DrawCircleV(center, 18 * control.focus_time[idx], Fade(BLACK, 0.1))
+		fill := Fade(style.colors[.highlight], state_time^)
 		draw_rounded_rect({rect.x, rect.y, CHECKBOX_SIZE, CHECKBOX_SIZE}, style.corner_radius, 7, fill)
-		draw_rounded_rect_lines({rect.x + 2, rect.y + 2, CHECKBOX_SIZE - 4, CHECKBOX_SIZE - 4}, style.corner_radius, 7, 2, style.colors[.outline])
+		draw_rounded_rect_lines({rect.x + 2, rect.y + 2, CHECKBOX_SIZE - 4, CHECKBOX_SIZE - 4}, style.corner_radius, 7, 2, style.colors[.highlight])
 		if value^ {
 			time1 := min(state_time^, 0.5) * 2
 			time2 := max(min(state_time^ - 0.5, 0.5), 0.0) * 2

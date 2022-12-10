@@ -3,15 +3,22 @@ import "vendor:raylib"
 import "core:fmt"
 import "core:strings"
 import "core:math"
+import "core:os"
 
 main :: proc(){
 	using raylib
 
 	frame := 0
-	title := "Glory to God in the highest, and on earth peace, goodwill toward men"
+	title := ""
+	{
+		data, ok := os.read_entire_file("title.txt")
+		if ok {
+			title = string(data)
+		}
+	}
 	val := false
 
-	SetConfigFlags({.WINDOW_RESIZABLE})
+	SetConfigFlags({.WINDOW_RESIZABLE, .MSAA_4X_HINT})
 	InitWindow(1000, 800, strings.clone_to_cstring(title))
 	SetTargetFPS(300)
 
@@ -30,11 +37,11 @@ main :: proc(){
 		if begin_widget({ctx.width / 2 - 400, ctx.height / 2 - 300, 800, 600}) {
 			push_layout()
 
-			layout_place_at({width=1}, {0, 0, 0, 40}, {})
-			if .change in text_box(&title, {}) {
+			layout_place_at({width=1}, {0, 0, 0, 55}, {})
+			if .change in text_box(&title, "Window title", {}) {
 				SetWindowTitle(strings.clone_to_cstring(title))
 			}
-			layout_set_size(120, 26)
+			layout_set_size(120, 30)
 			layout_set_side(.bottom)
 
 			if .submit in button("Open Menu", {}) {
@@ -49,7 +56,7 @@ main :: proc(){
 
 		if begin_widget({ctx.width / 2 - 200, ctx.height / 2 - 200, 400, 400}){
 			push_layout()
-			layout_place_at({}, {0, 0, 200, 40}, {})
+			layout_place_at({}, {0, 0, 200, 30}, {})
 			if .submit in button("bring to front", {}) {
 
 			}
@@ -70,4 +77,6 @@ main :: proc(){
 
 		EndDrawing()
 	}
+
+	os.write_entire_file("title.txt", transmute([]u8)title, true)
 }	

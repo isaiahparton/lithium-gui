@@ -18,8 +18,8 @@ Layout :: struct {
 
 push_layout :: proc(){
 	using ctx
+	assert(layout_index < MAX_LAYOUTS, "push_layout(): Layout stack overflow")
 	layout_index += 1
-	assert(layout_index < MAX_LAYOUTS, "uh...")
 	layout[layout_index] = {spacing=style.spacing}
 }
 push_attached_layout :: proc(side: Rect_Side){
@@ -31,6 +31,7 @@ push_attached_layout :: proc(side: Rect_Side){
 }
 pop_layout :: proc(){
 	using ctx
+	assert(layout_index > 0, "pop_layout(): Layout stack is empty")
 	layout_index -= 1
 }
 
