@@ -3,25 +3,30 @@ import "vendor:raylib"
 import "core:fmt"
 
 MAX_WIDGETS :: 16
+TITLE_BAR_HEIGHT :: 40
+
 Widget :: struct {
-	reserved: bool,
+	time: f32,
+	title: string,
 	contents: map[Id]int,
 	rect, inner_rect, used_rect: Rectangle,
 	offset, offset_target, space, tex_offset: [2]f32,
+	layer: int,
+	opts: Option_Set,
 }
 
-begin_widget :: proc(rect: Rectangle, loc := #caller_location) -> bool {
+begin_widget :: proc(rect: Rectangle, title: string, opts: Option_Set, loc := #caller_location) -> bool {
 	using ctx
-
+	assert(widget_count < MAX_WIDGETS, "begin_widget(): Widget stack overflow")
 	//--- hash the caller location and lookup ---//
 	id := get_loc_id(loc)
 	idx, ok := widget_map[id]
 	//--- if none is found reserve one ---//
 	if !ok {
 		for i := 0; i < MAX_WIDGETS; i += 1 {
-			if !widget.reserved[i] {
+			if !widget_reserved[i] {
 				idx = i
-				widget[i] = {}
+				widget[i] = {rect=rect}
 				break
 			}
 			if i == MAX_WIDGETS - 1 {
@@ -29,20 +34,25 @@ begin_widget :: proc(rect: Rectangle, loc := #caller_location) -> bool {
 			}
 		}
 	}
-	//--- update widget data ---//
-	widget_idx = idx
+	widget_reserved[idx] = true
 	widget_map[id] = idx
-	widget.reserved[idx] = true
-	widget.rect[idx] = rect
-	widget.inner_rect[idx] = {
-		rect.x + style.padding,
-		rect.y + style.padding,
-		rect.width - style.padding * 2,
-		rect.height - style.padding * 2,
+	//--- update widget data ---//
+	self := &widget[idx]
+	self.title = title
+	self.opts = opts
+	self.inner_rect = {
+		self.rect.x + style.padding,
+		self.rect.y + style.padding,
+		self.rect.width - style.padding * 2,
+		self.rect.height - style.padding * 2,
 	}
+	self.space = {}
+	widget_rect = self.rect
+
+	//--- current widget state ---//
 	widget_count += 1
-	widget_hover = raylib.CheckCollisionPointRec(raylib.GetMousePosition(), rect)
-	widget.space[idx] = {rect.width, rect.height}
+	widget_idx = idx
+	widget_hover = raylib.CheckCollisionPointRec(raylib.GetMousePosition(), self.rect)
 
 	//--- setup surface area for drawing ---//
 	raylib.BeginTextureMode(panel_tex)
@@ -52,9 +62,9 @@ begin_widget :: proc(rect: Rectangle, loc := #caller_location) -> bool {
 		max_panel_height = 0
 	}
 	raylib.rlPushMatrix()
-	raylib.rlTranslatef(tex_offset.x - rect.x, tex_offset.y - rect.y, 0)
-	raylib.BeginScissorMode(i32(tex_offset.x), i32(tex_offset.y), i32(rect.width), i32(rect.height))
-	widget.tex_offset[idx] = tex_offset
+	raylib.rlTranslatef(tex_offset.x - self.rect.x, tex_offset.y - self.rect.y, 0)
+	raylib.BeginScissorMode(i32(tex_offset.x), i32(tex_offset.y), i32(self.rect.width), i32(self.rect.height))
+	self.tex_offset = tex_offset
 	if tex_offset.x + rect.width > f32(panel_tex.texture.width) {
 		tex_offset.x = 0
 		tex_offset.y += max_panel_height
@@ -62,46 +72,51 @@ begin_widget :: proc(rect: Rectangle, loc := #caller_location) -> bool {
 		tex_offset.x += rect.width
 	}
 	max_panel_height = max(max_panel_height, rect.height)
-	draw_rounded_rect(rect, style.corner_radius * 2, 7, style.colors[.foreground])
-	//raylib.DrawTriangle({rect.x + rect.width, rect.y + rect.height - 30}, {rect.x + rect.width - 30, rect.y + rect.height}, {rect.x + rect.width, rect.y + rect.height}, raylib.BLACK)
+	radius := style.corner_radius * 2
+	if .no_title_bar in opts {
+		draw_rounded_rect(self.rect, radius, CORNER_VERTS, style.colors[.foreground])
+	} else {
+		draw_rounded_rect_pro(self.rect, {0, 0, radius, radius}, CORNER_VERTS, style.colors[.foreground])
+	}
+	//raylib.DrawTriangle({rect.x + rect.width, rect.y + rect.height - 20}, {rect.x + rect.width - 20, rect.y + rect.height}, {rect.x + rect.width, rect.y + rect.height}, style.colors[.highlight])
+	push_layout()
 	return true
 }
 end_widget :: proc(){
 	using ctx
+	pop_layout()
 	raylib.EndScissorMode()
 	raylib.rlPopMatrix()
 	raylib.EndTextureMode()
 
+	self := &widget[widget_idx]
 	//--- update scrolling/panning ---//
-	offset := &widget.offset[widget_idx]
-	offset_target := &widget.offset_target[widget_idx]
-	offset^ += (offset_target^ - offset^) * 20 * raylib.GetFrameTime()
+	self.offset += (self.offset_target - self.offset) * 20 * raylib.GetFrameTime()
 	if widget_hover {
 		delta := raylib.GetMouseWheelMove() * 77
 		if raylib.IsKeyDown(.LEFT_SHIFT) {
-			offset_target.x -= delta
+			self.offset_target.x -= delta
 		} else {
-			offset_target.y -= delta
+			self.offset_target.y -= delta
 		}
 		if raylib.IsMouseButtonPressed(.MIDDLE) {
-			drag_from = mouse_point + offset^
+			drag_from = mouse_point + self.offset
 		}
 		if raylib.IsMouseButtonDown(.MIDDLE) {
-			offset^ = drag_from - mouse_point
-			offset_target^ = offset^
+			self.offset = drag_from - mouse_point
+			self.offset_target = self.offset
 		}
 	}
-	widget.space[widget_idx].y -= style.padding
-	offset.x = clamp(offset.x, 0, widget.space[widget_idx].x - widget.rect[widget_idx].width)
-	offset.y = clamp(offset.y, 0, widget.space[widget_idx].y - widget.inner_rect[widget_idx].height)
-	offset_target.x = clamp(offset_target.x, 0, widget.space[widget_idx].x - widget.rect[widget_idx].width)
-	offset_target.y = clamp(offset_target.y, 0, widget.space[widget_idx].y - widget.inner_rect[widget_idx].height)
-
+	self.space += style.padding
+	max_x, max_y := max(0, self.space.x - self.rect.width), max(0, self.space.y - self.rect.height)
+	self.offset.x = clamp(self.offset.x, 0, max_x)
+	self.offset_target.x = clamp(self.offset_target.x, 0, max_x)
+	self.offset.y = clamp(self.offset.y, 0, max_y)
+	self.offset_target.y = clamp(self.offset_target.y, 0, max_y)
 	//--- delete entries for controls that don't exist ---//
-	contents := &widget[widget_idx].contents
-	for id, idx in contents {
+	for id, idx in self.contents {
 		if !control.exists[idx] {
-			delete_key(contents, id)
+			delete_key(&self.contents, id)
 			control.reserved[idx] = false
 		}
 	}

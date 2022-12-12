@@ -7,7 +7,7 @@ import "core:math"
 import "core:runtime"
 
 MAX_CONTROLS :: 128
-CORNER_VERTS :: 4
+CORNER_VERTS :: 5
 
 Option :: enum {
 	disabled,
@@ -15,8 +15,14 @@ Option :: enum {
 	hold_focus,
 	draggable,
 	in_loop,
+	inner,
+	uniform,
+	align_center,
+	align_far,
+	no_title_bar,
+	resizable,
 }
-Option_Set :: bit_set[Option;u8]
+Option_Set :: bit_set[Option;u16]
 
 Result :: enum {
 	hover,
@@ -28,7 +34,7 @@ Result :: enum {
 }
 Result_Set :: bit_set[Result;u8]
 
-Control :: struct {
+ControlData :: struct {
 	exists, reserved, disabled, state: bool,
 	id: Id,
 	hover_time, focus_time, state_time: f32,
@@ -72,11 +78,7 @@ get_loc_id :: proc(loc: runtime.Source_Code_Location) -> Id{
 	return get_id(rawptr(&loc), size_of(loc))
 }
 check_control_clip :: proc(rect: Rectangle) -> bool {
-	space := &ctx.widget.space[ctx.widget_idx]
-	widget_rect := ctx.widget.rect[ctx.widget_idx]
-	space.x = max(space.x, (rect.x + ctx.widget.offset[ctx.widget_idx].x - widget_rect.x) + rect.width)
-	space.y = max(space.y, (rect.y + ctx.widget.offset[ctx.widget_idx].y - widget_rect.y) + rect.height)
-	return raylib.CheckCollisionRecs(rect, widget_rect)
+	return raylib.CheckCollisionRecs(rect, ctx.widget_rect)
 }
 reserve_control :: proc(id: Id) -> int {
 	using ctx
@@ -118,6 +120,7 @@ update_control :: proc(opts: Option_Set) {
 		}
 	}
 	if widget_hover && raylib.CheckCollisionPointRec(raylib.GetMousePosition(), rect) {
+		hover_text = false
 		if prev_hover_id != id {
 			res += {.just_hovered}
 		}
@@ -136,7 +139,7 @@ update_control :: proc(opts: Option_Set) {
 
 begin_control :: proc(opts: Option_Set, loc: runtime.Source_Code_Location) -> bool {
 	using ctx.control_state
-	rect = get_control_rect()
+	rect = get_control_rect(opts)
 	if !check_control_clip(rect) {
 		return false
 	}
@@ -158,7 +161,7 @@ begin_free_control :: proc(my_rect: Rectangle, opts: Option_Set, loc: runtime.So
 }
 begin_static_control :: proc(opts: Option_Set) -> bool {
 	using ctx.control_state
-	rect = get_control_rect()
+	rect = get_control_rect(opts)
 	if !check_control_clip(rect) {
 		return false
 	}
@@ -166,46 +169,52 @@ begin_static_control :: proc(opts: Option_Set) -> bool {
 }
 end_control :: proc() -> Result_Set {
 	using ctx.control_state
-	layout_set_last(rect)
+	layout := &ctx.layout[ctx.layout_idx]
+	layout.size = {rect.width, rect.height}
+	layout.last_rect = rect
+	layout.full_rect.x = min(layout.full_rect.x, rect.x)
+	layout.full_rect.y = min(layout.full_rect.y, rect.y)
+	layout.full_rect.width = max(layout.full_rect.width, rect.width + (rect.x - layout.full_rect.x))
+	layout.full_rect.height = max(layout.full_rect.height, rect.height + (rect.y - layout.full_rect.y))
 	return res
 }
 
 // get's the next control's rectangle
-get_control_rect :: proc() -> Rectangle {
-	layout := &ctx.layout[ctx.layout_index]
-	if ctx.set_rect {
-		ctx.set_rect = false
-		layout.first_rect.x -= ctx.widget[ctx.widget_idx].offset.x
-		layout.first_rect.y -= ctx.widget[ctx.widget_idx].offset.y
-		return layout.first_rect
+get_control_rect :: proc(opts: Option_Set) -> Rectangle {
+	layout := &ctx.layout[ctx.layout_idx]
+	if layout.last_rect == {} {
+		rect := ctx.widget[ctx.widget_idx].inner_rect
+		return {rect.x, rect.y, rect.width, layout.size.y}
 	}
-	spacing := layout.spacing
-	rect := layout.last_rect
-	rect.width, rect.height = layout.size.x, layout.size.y
-	if layout.side == .top {
-		rect.y -= layout.size.y + spacing
-	} else if layout.side == .bottom {
-		rect.y += layout.last_rect.height + spacing
-	} else if layout.side == .left {
-		rect.x -= layout.size.x + spacing
-	} else if layout.side == .right {
-		rect.x += layout.last_rect.width + spacing
-	}
-	return rect
+	return get_next_rect(layout.last_rect, layout.size, layout.side, opts)
 }
 
 // basic control frame
 @private
-draw_control_frame :: proc(rect: Rectangle, radius: f32, fill: Color){
+draw_control_frame :: proc(rect: Rectangle, fill: Color){
 	using ctx
+	draw_rounded_rect(rect, style.corner_radius, CORNER_VERTS, fill)
+}
+
+@private
+draw_control_circle :: proc(point: [2]f32){
+	using ctx
+	using control_state
 	using raylib
-	draw_rounded_rect(rect, radius, CORNER_VERTS, fill)
+	DrawCircleV(Vector2(point), 20, Fade(BLACK, control.hover_time[idx] * 0.1))
+	if .focus in res {
+		DrawCircleV(Vector2(point), 20 * control.focus_time[idx], Fade(BLACK, 0.1))
+	} else {
+		DrawCircleV(Vector2(point), 20, Fade(BLACK, control.focus_time[idx] * 0.1))
+	}
 }
 
 // text input
-text_box :: proc(content: ^string, label: string, opts: Option_Set, loc := #caller_location) -> Result_Set {
+TEXT_BOX_HEIGHT :: 55
+text_box :: proc(content: ^string, title: string, opts: Option_Set, loc := #caller_location) -> Result_Set {
 	using ctx
 	using raylib
+	ctx.layout[ctx.layout_idx].size.y = TEXT_BOX_HEIGHT
 	if begin_control(opts, loc) {
 		update_control(opts + {.hold_focus})
 		using control_state
@@ -221,15 +230,16 @@ text_box :: proc(content: ^string, label: string, opts: Option_Set, loc := #call
 		font := style.font
 		font_height := f32(font.baseSize)
 		focus_time := control.focus_time[idx]
+		label_offset := style.text_padding - 3
 		fill := blend_colors(style.colors[.fill], BLACK, min(1, control.hover_time[idx] + focus_time) * 0.1)
 		draw_rounded_rect_pro(rect, {style.corner_radius, style.corner_radius, 0, 0}, CORNER_VERTS, fill)
 		DrawRectangleRec({rect.x, rect.y + rect.height - 2, rect.width, 2}, style.colors[.accent])
 		size := rect.width * focus_time
-		DrawRectangleRec({rect.x + rect.width / 2 - size / 2, rect.y + rect.height - 2, size, 2}, blend_colors(style.colors[.accent], style.colors[.text], focus_time))
+		DrawRectangleRec({rect.x + rect.width / 2 - size / 2, rect.y + rect.height - 2, size, 2}, blend_colors(style.colors[.accent], style.colors[.highlight], focus_time))
 		if len(content) == 0 {
-			draw_aligned_string(font, label, {rect.x + style.text_padding, rect.y + style.text_padding + (rect.height / 2 - font_height / 2 - style.text_padding) * (1 - focus_time)}, cast(f32)style.font.baseSize * (1 - focus_time * 0.35), Fade(BLACK, 0.5), .near, .near)
+			draw_aligned_string(font, title, {rect.x + style.text_padding, rect.y + label_offset + (rect.height / 2 - font_height / 2 - label_offset) * (1 - focus_time)}, cast(f32)style.font.baseSize * (1 - focus_time * 0.2), {0, 0, 0, 200}, .near, .near)
 		} else {
-			draw_aligned_string(font, label, {rect.x + style.text_padding, rect.y + style.text_padding}, cast(f32)style.font.baseSize * 0.65, Fade(BLACK, 0.5), .near, .near)
+			draw_aligned_string(font, title, {rect.x + style.text_padding, rect.y + label_offset}, cast(f32)style.font.baseSize * 0.8, {0, 0, 0, 200}, .near, .near)
 		}
 		
 		if .focus in res {
@@ -468,13 +478,22 @@ text_box :: proc(content: ^string, label: string, opts: Option_Set, loc := #call
 }
 
 // submited when hovered, clicked then released
+BUTTON_HEIGHT :: 30
 button :: proc(title: string, opts: Option_Set, loc := #caller_location) -> Result_Set {
 	using ctx
 	using raylib
+	layout[layout_idx].size.y = BUTTON_HEIGHT
 	if begin_control(opts, loc) {
 		using control_state
 		update_control(opts)
-		draw_control_frame(rect, style.corner_radius, blend_colors(style.colors[.highlight], WHITE, (control.hover_time[idx] + control.focus_time[idx]) * 0.1))
+		//draw_control_frame(rect, blend_colors(style.colors[.highlight], WHITE, (control.hover_time[idx] + control.focus_time[idx]) * 0.1))
+		draw_rounded_rect(rect, style.corner_radius, CORNER_VERTS, blend_colors(style.colors[.highlight], WHITE, control.hover_time[idx] * 0.1))
+		scale := control.focus_time[idx]
+		if .focus in res {
+			draw_rounded_rect({rect.x + (rect.width / 2) * (1 - scale), rect.y + (rect.height / 2) * (1 - scale), rect.width * scale, rect.height * scale}, style.corner_radius, CORNER_VERTS, Fade(WHITE, scale * 0.05))
+		} else {
+			draw_rounded_rect(rect, style.corner_radius, CORNER_VERTS, Fade(WHITE, scale * 0.05))
+		}
 		draw_aligned_string(style.font, title, {rect.x + rect.width / 2, rect.y + rect.height / 2}, cast(f32)style.font.baseSize, style.colors[.foreground], .center, .center)
 	}
 	return end_control()
@@ -488,19 +507,18 @@ checkbox :: proc(value: ^bool, title: string, opts: Option_Set, loc := #caller_l
 	using raylib
 	if begin_control(opts, loc) {
 		using control_state
-		rect.y += rect.height / 2 - HALF_CHECKBOX_SIZE
+		prev_width := rect.width
 		rect.width, rect.height = CHECKBOX_SIZE, CHECKBOX_SIZE
 		if title != {} {
 			rect.width += measure_string(style.font, title, cast(f32)style.font.baseSize).x + style.text_padding
 		}
 		update_control(opts)
 		state_time := &control.state_time[idx]
-		center := Vector2{rect.x + HALF_CHECKBOX_SIZE, rect.y + HALF_CHECKBOX_SIZE}
-		DrawCircleV(center, 18, Fade(BLACK, control.hover_time[idx] * 0.1))
-		DrawCircleV(center, 18 * control.focus_time[idx], Fade(BLACK, 0.1))
+		center := [2]f32{rect.x + HALF_CHECKBOX_SIZE, rect.y + HALF_CHECKBOX_SIZE}
+		draw_control_circle(center)
 		fill := Fade(style.colors[.highlight], state_time^)
-		draw_rounded_rect({rect.x, rect.y, CHECKBOX_SIZE, CHECKBOX_SIZE}, style.corner_radius, 7, fill)
-		draw_rounded_rect_lines({rect.x + 2, rect.y + 2, CHECKBOX_SIZE - 4, CHECKBOX_SIZE - 4}, style.corner_radius, 7, 2, style.colors[.highlight])
+		draw_rounded_rect_lines({rect.x + 2, rect.y + 2, CHECKBOX_SIZE - 4, CHECKBOX_SIZE - 4}, style.corner_radius, CORNER_VERTS, 3, style.colors[.highlight])
+		draw_rounded_rect({rect.x, rect.y, CHECKBOX_SIZE, CHECKBOX_SIZE}, style.corner_radius, CORNER_VERTS, fill)
 		if value^ {
 			time1 := min(state_time^, 0.5) * 2
 			time2 := max(min(state_time^ - 0.5, 0.5), 0.0) * 2
@@ -520,6 +538,7 @@ checkbox :: proc(value: ^bool, title: string, opts: Option_Set, loc := #caller_l
 		if .submit in res {
 			value^ = !value^
 		}
+		rect.width = prev_width
 	}
 	return end_control()
 }
@@ -541,21 +560,23 @@ lock_mouse_to_slider :: proc(min, max, baseline: f32){
 slider :: proc(value: ^f32, min, max: f32, opts: Option_Set, loc := #caller_location) -> Result_Set {
 	using ctx
 	using raylib
+	opts := opts + {.draggable}
 	if begin_control(opts, loc){
 		using control_state
 		rect.height = 20
 		update_control(opts)
 		baseline := rect.y + 10
-		draw_rounded_rect({rect.x, baseline - 5, rect.width, 10}, 5, 7, style.colors[.backing])
-		inner_size := rect.width - 20
-		value_point := Vector2{rect.x + 10 + inner_size * ((value^ - min) / (max - min)), baseline}
-		draw_rounded_rect({rect.x, baseline - 5, value_point.x - rect.x, 10}, 5, 7, style.colors[.highlight])
-		draw_control_frame({value_point.x - 10, value_point.y - 10, 20, 20}, 10, blend_colors(blend_colors(style.colors[.fill], BLACK, control.hover_time[idx] * 0.1), style.colors[.highlight], control.focus_time[idx]))
+		draw_rounded_rect({rect.x, baseline - 5, rect.width, 10}, 5, 7, style.colors[.fill])
+		inner_size := rect.width - 10
+		value_point := [2]f32{rect.x + 5 + inner_size * ((value^ - min) / (max - min)), baseline}
+		draw_control_circle(value_point)
+		draw_rounded_rect({rect.x, baseline - 5, value_point.x - rect.x, 10}, 5, 7, style.colors[.accent])
+		DrawCircle(i32(value_point.x), i32(value_point.y), 10, style.colors[.accent])
 		if .focus in res {
-			hide_cursor = true
-			lock_mouse_to_slider(rect.x + 10, rect.x + 11 + inner_size, baseline)
+			//hide_cursor = true
+			//lock_mouse_to_slider(rect.x + 5, rect.x + 6 + inner_size, baseline)
 			prev_value := value^
-			value^ = clamp(min + ((f32(GetMouseX()) - (rect.x + 10)) / inner_size) * (max - min), min, max)
+			value^ = clamp(min + ((f32(GetMouseX()) - (rect.x + 5)) / inner_size) * (max - min), min, max)
 			if value^ != prev_value {
 				res += {.change}
 			}
@@ -567,41 +588,47 @@ slider :: proc(value: ^f32, min, max: f32, opts: Option_Set, loc := #caller_loca
 range_slider :: proc(low, high: ^f32, min, max: f32, opts: Option_Set, loc := #caller_location) -> Result_Set {
 	using ctx
 	using raylib
-	rect := get_control_rect()
+	rect := get_control_rect(opts)
 	rect.height = 20
 	layout_set_last(rect)
 	baseline := rect.y + 10
 	res := Result_Set{}
 	loc := loc
 	
-	draw_rounded_rect_lines({rect.x, baseline - 5, rect.width, 10}, 5, 7, style.outline_thick, style.colors[.outline])
-	inner_size := rect.width - 20
+	draw_rounded_rect({rect.x, baseline - 5, rect.width, 10}, 5, 7, style.colors[.fill])
+	inner_size := rect.width - 10
 
-	low_point := Vector2{rect.x + 10 + inner_size * (low^ / (max - min)), baseline}
-	high_point := Vector2{rect.x + 10 + inner_size * (high^ / (max - min)), baseline}
-	DrawRectangleRec({low_point.x, baseline - 5, (high_point.x - low_point.x), 10}, style.colors[.highlight])
+	low_point := [2]f32{rect.x + 5 + inner_size * (low^ / (max - min)), baseline}
+	high_point := [2]f32{rect.x + 5 + inner_size * (high^ / (max - min)), baseline}
 	low_rect := Rectangle{low_point.x - 10, low_point.y - 10, 20, 20}
-	if begin_free_control(low_rect, opts + {.draggable}, loc) {
+	if begin_free_control(low_rect, opts, loc) {
 		using control_state
-		draw_control_frame(rect, 10, blend_colors(blend_colors(style.colors[.fill], BLACK, control.hover_time[idx] * 0.1), style.colors[.highlight], control.focus_time[idx]))
+		update_control(opts + {.draggable})
+		draw_control_circle(low_point)
+		DrawCircle(i32(low_point.x), i32(low_point.y), 10, style.colors[.accent])
 	}
 	low_knob := end_control()
 
 	loc.column += 1
 
 	high_rect := Rectangle{high_point.x - 10, high_point.y - 10, 20, 20}
-	if begin_free_control(high_rect, opts + {.draggable}, loc) {
+	if begin_free_control(high_rect, opts, loc) {
 		using control_state
-		draw_control_frame(rect, 10, blend_colors(blend_colors(style.colors[.fill], BLACK, control.hover_time[idx] * 0.1), style.colors[.highlight], control.focus_time[idx]))
+		update_control(opts + {.draggable})
+		draw_control_circle(high_point)
+		DrawCircle(i32(high_point.x), i32(high_point.y), 10, style.colors[.accent])
 	}
-	high_knob := Result_Set{}
+	high_knob := end_control()
+
+	DrawRectangleRec({low_point.x, baseline - 5, (high_point.x - low_point.x), 10}, style.colors[.accent])
 
 	if .focus in low_knob {
-		low^ = clamp(min + ((f32(GetMouseX()) - (rect.x + 10)) / inner_size) * (max - min), min, high^)
+		low^ = clamp(min + ((f32(GetMouseX()) - (rect.x + 5)) / inner_size) * (max - min), min, high^)
 	}
 	if .focus in high_knob {
-		high^ = clamp(min + ((f32(GetMouseX()) - (rect.x + 10)) / inner_size) * (max - min), low^, max)
+		high^ = clamp(min + ((f32(GetMouseX()) - (rect.x + 5)) / inner_size) * (max - min), low^, max)
 	}
+	layout_set_last(rect)
 	return res
 }
 
@@ -626,7 +653,7 @@ text :: proc(text: string, align_x, align_y: Alignment, opts: Option_Set){
 	} else {
 		size = measure_string(style.font, text, cast(f32)style.font.baseSize)
 	}
-	side := layout[layout_index].side
+	side := layout[layout_idx].side
 	if side == .bottom || side == .top {
 		control_state.rect.height = size.y
 	} else if side == .left || side == .right {

@@ -159,6 +159,9 @@ draw_string :: proc(font: Font, text: string, origin: [2]f32, scale: f32, tint: 
     return offset
 }
 draw_aligned_string :: proc(font: Font, text: string, origin: [2]f32, scale: f32, tint: Color, align_x, align_y: Alignment) -> [2]f32 {
+    if text == {} {
+        return {}
+    }
 	text_size := measure_string(font, text, scale)
 	offset : [2]f32 = 0.0
 	if align_x == .center do offset.x -= text_size.x / 2

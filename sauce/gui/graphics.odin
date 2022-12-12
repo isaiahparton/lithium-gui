@@ -27,6 +27,10 @@ draw_icon :: proc(origin: [2]f32, icon: Icon, align_x, align_y: Alignment, tint:
     raylib.DrawTexturePro(icon_atlas, {f32(int(icon) % icon_cols) * size, f32(int(icon) / icon_cols) * size, size, size}, {origin.x, origin.y, size, size}, {0, 0}, 0, tint)
 }
 
+expand_rect :: proc(rect: Rectangle, scale: f32) -> Rectangle {
+    return {rect.x - scale, rect.y - scale, rect.width + scale * 2, rect.height + scale * 2}
+}
+
 draw_circle_gradient :: proc(x, y, radius, start, end: f32, color1, color2: Color) {
     using raylib
     rlBegin(RL_TRIANGLES)
