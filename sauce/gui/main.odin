@@ -11,7 +11,6 @@ main :: proc(){
 
 	frame := 0
 	title := ""
-	text := ""
 	{
 		data, ok := os.read_entire_file("title.txt")
 		if ok {
@@ -48,7 +47,7 @@ main :: proc(){
 		if begin_widget({ctx.width / 2 - 450, ctx.height / 2 - 300, 400, 600}, title, {} if val else {.no_title_bar}) {
 			checkbox(&val, "Menu bars", {})
 			slider(&ctx.style.corner_radius, 0, 10, {})
-			text(fmt.aprintf(ctx.style.corner_radius), .near, .near, {})
+			text(fmt.aprint(ctx.style.corner_radius), .near, .near, {})
 			end_widget()
 		}
 

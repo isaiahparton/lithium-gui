@@ -1,2 +1,2 @@
 @echo off
-odin run ./sauce/gui -out:test.exe -verbose-errors
+odin run ./sauce/gui -out:demo.exe -verbose-errors

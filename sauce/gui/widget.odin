@@ -65,20 +65,19 @@ begin_widget :: proc(rect: Rectangle, title: string, opts: Option_Set, loc := #c
 	raylib.rlTranslatef(tex_offset.x - self.rect.x, tex_offset.y - self.rect.y, 0)
 	raylib.BeginScissorMode(i32(tex_offset.x), i32(tex_offset.y), i32(self.rect.width), i32(self.rect.height))
 	self.tex_offset = tex_offset
-	if tex_offset.x + rect.width > f32(panel_tex.texture.width) {
+	if tex_offset.x + self.rect.width > f32(panel_tex.texture.width) {
 		tex_offset.x = 0
 		tex_offset.y += max_panel_height
 	} else {
-		tex_offset.x += rect.width
+		tex_offset.x += self.rect.width
 	}
-	max_panel_height = max(max_panel_height, rect.height)
+	max_panel_height = max(max_panel_height, self.rect.height)
 	radius := style.corner_radius * 2
 	if .no_title_bar in opts {
 		draw_rounded_rect(self.rect, radius, CORNER_VERTS, style.colors[.foreground])
 	} else {
 		draw_rounded_rect_pro(self.rect, {0, 0, radius, radius}, CORNER_VERTS, style.colors[.foreground])
 	}
-	//raylib.DrawTriangle({rect.x + rect.width, rect.y + rect.height - 20}, {rect.x + rect.width - 20, rect.y + rect.height}, {rect.x + rect.width, rect.y + rect.height}, style.colors[.highlight])
 	push_layout()
 	return true
 }

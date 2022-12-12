@@ -65,6 +65,7 @@ Context :: struct {
 	widget_count, widget_idx: int,
 	widget_hover: bool,
 	widget_drag: int,
+	widget_resize: bool,
 	widget_rect: Rectangle,
 	widget: [MAX_WIDGETS]Widget,
 	widget_reserved: [MAX_WIDGETS]bool,
@@ -98,6 +99,8 @@ Context :: struct {
 	panel_tex: raylib.RenderTexture,
 	tex_offset: [2]f32,
 	max_panel_height: f32,
+	shadow_tex: raylib.Texture,
+	shadow_npatch: raylib.NPatchInfo,
 }
 ctx : Context = {}
 
@@ -112,6 +115,8 @@ init_context :: proc(){
 		panel_tex = raylib.LoadRenderTexture(4096, 4096)
 		icon_atlas = raylib.LoadTexture("./icons/atlas.png")
 		icon_cols = cast(int)icon_atlas.width / style.icon_size
+		shadow_tex = raylib.LoadTexture("./shadow.png")
+		shadow_npatch = { { 0, 0, cast(f32)shadow_tex.width, cast(f32)shadow_tex.height }, 40, 40, 40, 40, .NINE_PATCH }
 	}
 }
 init_default_style :: proc(){
@@ -228,17 +233,22 @@ end :: proc(){
 		}
 		control.exists = false
 	}
-	if IsMouseButtonDown(.MIDDLE) {
-		SetMouseCursor(MouseCursor.RESIZE_ALL)
+
+	if widget_resize {
+		SetMouseCursor(.RESIZE_NWSE)
 	} else {
-		if hover_id != 0 || focus_id != 0 {
-			if hover_text {
-				SetMouseCursor(.IBEAM)
-			} else {
-				SetMouseCursor(.POINTING_HAND)
-			}
+		if IsMouseButtonDown(.MIDDLE) {
+			SetMouseCursor(MouseCursor.RESIZE_ALL)
 		} else {
-			SetMouseCursor(.DEFAULT)
+			if hover_id != 0 || focus_id != 0 {
+				if hover_text {
+					SetMouseCursor(.IBEAM)
+				} else {
+					SetMouseCursor(.POINTING_HAND)
+				}
+			} else {
+				SetMouseCursor(.DEFAULT)
+			}
 		}
 	}
 
@@ -257,7 +267,9 @@ end :: proc(){
 			rlScalef(0.9 + time * 0.1, 0.9 + time * 0.1, 0)
 			time -= time * FADE_SPEED * GetFrameTime()
 		}
-		//draw_shadow(rect, style.corner_radius * 2, 24, {0, 0, 0, u8(self.time * 50)})
+		dst := Rectangle{-half_width, -half_height, rect.width, rect.height}
+		//draw_shadow(dst, style.corner_radius * 2, 24, {0, 0, 0, u8(self.time * 50)})
+		DrawTextureNPatch(shadow_tex, shadow_npatch, {dst.x - 40, dst.y - 40, dst.width + 80, dst.height + 80}, {0, 0}, 0, WHITE)
 		radius := style.corner_radius * 2
 		if .no_title_bar not_in opts {
 			title_rect := Rectangle{-half_width, -half_height - TITLE_BAR_HEIGHT, rect.width, TITLE_BAR_HEIGHT}
@@ -268,16 +280,39 @@ end :: proc(){
 					drag_from = {rect.x, rect.y} - mouse_point
 					widget_drag = i
 				}
-				if i == widget_drag && IsMouseButtonDown(.LEFT) {
+			}
+			if i == widget_drag && !widget_resize {
+				if IsMouseButtonDown(.LEFT) {
 					rect.x = mouse_point.x + drag_from.x
 					rect.y = mouse_point.y + drag_from.y 
 				}
 			}
 		}
-		draw_render_surface(panel_tex, {tex_offset.x, tex_offset.y, rect.width, rect.height}, {-half_width, -half_height, rect.width, rect.height}, Fade(WHITE, self.time))
+		draw_render_surface(panel_tex, {tex_offset.x, tex_offset.y, rect.width, rect.height}, dst, Fade(WHITE, self.time))
+		raylib.DrawTriangle({dst.x + dst.width, dst.y + dst.height - 20}, {dst.x + dst.width - 20, dst.y + dst.height}, {dst.x + dst.width, dst.y + dst.height}, style.colors[.highlight])
+		if CheckCollisionPointRec(GetMousePosition(), {rect.x + rect.width - 20, rect.y + rect.height - 20, 20, 20}) {
+			if IsMouseButtonPressed(.LEFT) {
+				widget_drag = i
+				widget_resize = true
+			}
+		}
+		if i == widget_drag && widget_resize {
+			if IsMouseButtonDown(.LEFT) {
+				rect.width = mouse_point.x - rect.x
+				rect.height = mouse_point.y - rect.y
+				rect.width = max(rect.width, 96)
+				rect.height = max(rect.height, 48)
+			} else if IsMouseButtonReleased(.LEFT) {
+				widget_resize = false
+			}
+		}
 		rlPopMatrix()
 	}
 	widget_count = 0
+
+	if IsMouseButtonReleased(.LEFT) {
+		widget_drag = -1
+	}
 }
 
 is_ctrl_down :: proc() -> bool {
