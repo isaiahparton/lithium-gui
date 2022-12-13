@@ -13,7 +13,7 @@ Alignment :: enum {
 	far,
 }
 
-FADE_SPEED :: 16.0
+FADE_SPEED :: 12.0
 
 ColorIndex :: enum {
 	background,
@@ -42,8 +42,7 @@ KEY_HOLD_PULSE :: 0.025
 DOUBLE_CLICK_TIME :: 0.275
 Context :: struct {
 	// input
-	mouse_point: [2]f32,
-	drag_from: [2]f32,
+	mouse_point, drag_from: [2]f32,
 	// uh
 	hover_id, prev_hover_id, focus_id, prev_focus_id: Id,
 	click, double_click: bool,
@@ -133,7 +132,7 @@ init_default_style :: proc(){
 	outline_thick = 1.1
 	padding = 16
 	spacing = 14
-	corner_radius = 5
+	corner_radius = 0
 	icon_size = 24
 	font = raylib.LoadFontEx("./fonts/Muli-SemiBold.ttf", 26, nil, 1024)
 	raylib.SetTextureFilter(font.texture, .BILINEAR)
@@ -146,7 +145,6 @@ begin :: proc(){
 	hide_cursor = false
 	layout_idx = -1
 	loc_offset = 0
-	active_widget = -1
 
 	rune_count = 0
 	rn := GetCharPressed()
@@ -217,20 +215,22 @@ end :: proc(){
 	}
 
 	for i := 0; i < MAX_CONTROLS; i += 1 {
-		if control.disabled[i] {
+		if control.disabled[i] || !control.reserved[i] {
 			continue
 		}
 		id := control.id[i]
 		if id == hover_id {
-			control.hover_time[i] += (1.0 - control.hover_time[i]) * FADE_SPEED * GetFrameTime()
+			control.hover_time[i] += 7 * GetFrameTime()
 		} else {
-			control.hover_time[i] -= control.hover_time[i] * FADE_SPEED * GetFrameTime()
+			control.hover_time[i] -= 7 * GetFrameTime()
 		}
+		control.hover_time[i] = clamp(control.hover_time[i], 0, 1)
 		if id == focus_id {
-			control.focus_time[i] += (1.0 - control.focus_time[i]) * FADE_SPEED * GetFrameTime()
+			control.focus_time[i] += 7 * GetFrameTime()
 		} else {
-			control.focus_time[i] -= control.focus_time[i] * FADE_SPEED * GetFrameTime()
+			control.focus_time[i] -= 7 * GetFrameTime()
 		}
+		control.focus_time[i] = clamp(control.focus_time[i], 0, 1)
 		control.exists = false
 	}
 
@@ -238,7 +238,7 @@ end :: proc(){
 		SetMouseCursor(.RESIZE_NWSE)
 	} else {
 		if IsMouseButtonDown(.MIDDLE) {
-			SetMouseCursor(MouseCursor.RESIZE_ALL)
+			SetMouseCursor(.RESIZE_ALL)
 		} else {
 			if hover_id != 0 || focus_id != 0 {
 				if hover_text {
@@ -252,11 +252,31 @@ end :: proc(){
 		}
 	}
 
-	for i := 0; i < MAX_WIDGETS; i += 1 {
+	active_widget = -1
+	if len(widget_stack) != 0 {
+		top := len(widget_stack) - 1
+		prev_top := top
+		for i, idx in widget_stack {
+			if CheckCollisionPointRec(GetMousePosition(), widget[i].rect) {
+				if IsMouseButtonPressed(.LEFT) {
+					top = idx
+				}
+				active_widget = i
+			}
+		}
+		if top != prev_top {
+			idx := widget_stack[top]
+			copy(widget_stack[top:], widget_stack[top + 1:])
+			widget_stack[prev_top] = idx
+		}
+	}
+	
+	for i, idx in widget_stack {
 		if !(widget_reserved[i] || widget[i].time > 0.01) {
 			continue
 		}
 		using self := &widget[i]
+		self.z = idx
 		half_width, half_height := rect.width / 2, rect.height / 2
 		rlPushMatrix()
 		rlTranslatef(rect.x + half_width, rect.y + half_height, 0)
@@ -268,34 +288,9 @@ end :: proc(){
 			time -= time * FADE_SPEED * GetFrameTime()
 		}
 		dst := Rectangle{-half_width, -half_height, rect.width, rect.height}
-		//draw_shadow(dst, style.corner_radius * 2, 24, {0, 0, 0, u8(self.time * 50)})
 		DrawTextureNPatch(shadow_tex, shadow_npatch, {dst.x - 40, dst.y - 40, dst.width + 80, dst.height + 80}, {0, 0}, 0, WHITE)
 		radius := style.corner_radius * 2
-		if .no_title_bar not_in opts {
-			title_rect := Rectangle{-half_width, -half_height - TITLE_BAR_HEIGHT, rect.width, TITLE_BAR_HEIGHT}
-			draw_rounded_rect_pro(title_rect, {radius, radius, 0, 0}, CORNER_VERTS, Fade(style.colors[.highlight], self.time))
-			draw_aligned_string(style.font, title, {title_rect.x + style.spacing, title_rect.y + title_rect.height / 2}, cast(f32)style.font.baseSize, Fade(style.colors[.foreground], self.time), .near, .center)
-			if CheckCollisionPointRec(GetMousePosition(), {rect.x, rect.y - TITLE_BAR_HEIGHT, rect.width, TITLE_BAR_HEIGHT}) {
-				if IsMouseButtonPressed(.LEFT) {
-					drag_from = {rect.x, rect.y} - mouse_point
-					widget_drag = i
-				}
-			}
-			if i == widget_drag && !widget_resize {
-				if IsMouseButtonDown(.LEFT) {
-					rect.x = mouse_point.x + drag_from.x
-					rect.y = mouse_point.y + drag_from.y 
-				}
-			}
-		}
 		draw_render_surface(panel_tex, {tex_offset.x, tex_offset.y, rect.width, rect.height}, dst, Fade(WHITE, self.time))
-		raylib.DrawTriangle({dst.x + dst.width, dst.y + dst.height - 20}, {dst.x + dst.width - 20, dst.y + dst.height}, {dst.x + dst.width, dst.y + dst.height}, style.colors[.highlight])
-		if CheckCollisionPointRec(GetMousePosition(), {rect.x + rect.width - 20, rect.y + rect.height - 20, 20, 20}) {
-			if IsMouseButtonPressed(.LEFT) {
-				widget_drag = i
-				widget_resize = true
-			}
-		}
 		if i == widget_drag && widget_resize {
 			if IsMouseButtonDown(.LEFT) {
 				rect.width = mouse_point.x - rect.x
@@ -307,7 +302,14 @@ end :: proc(){
 			}
 		}
 		rlPopMatrix()
+
+		if !self.exists {
+			delete_key(&widget_map, self.id)
+		}
+		self.exists = false
 	}
+		
+	
 	widget_count = 0
 
 	if IsMouseButtonReleased(.LEFT) {

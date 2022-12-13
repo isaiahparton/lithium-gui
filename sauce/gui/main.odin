@@ -37,23 +37,26 @@ main :: proc(){
 
 		begin()
 
-		if begin_widget({ctx.width / 2 + 50, ctx.height / 2 - 300, 400, 600}, title, {} if val else {.no_title_bar}) {
-			text_box(&title, "Window title", {})
-			if .submit in button("Open Menu", {}) {
+		if GetTime() > 1.0 {
+			if begin_widget({ctx.width / 2 + 50, ctx.height / 2 - 300, 300, 400}, title, {}) {
+				text_box(&title, "Window title", {})
+				if .submit in button("Open Menu", {}) {
 
+				}
+				end_widget()
 			}
-			end_widget()
-		}
-		if begin_widget({ctx.width / 2 - 450, ctx.height / 2 - 300, 400, 600}, title, {} if val else {.no_title_bar}) {
-			checkbox(&val, "Menu bars", {})
-			slider(&ctx.style.corner_radius, 0, 10, {})
-			text(fmt.aprint(ctx.style.corner_radius), .near, .near, {})
-			end_widget()
+			if begin_widget({ctx.width / 2 - 450, ctx.height / 2 - 300, 300, 400}, title, {}) {
+				checkbox(&val, "Menu bars", {})
+				slider(&ctx.style.corner_radius, 0, 10, {})
+				text(fmt.aprint(ctx.style.corner_radius), .near, .near, {})
+				end_widget()
+			}
 		}
 
 		draw_string(ctx.style.font, fmt.aprintf("%i fps", GetFPS()), {0, 0}, 26, BLACK)
 		draw_string(ctx.style.font, count_noun(ctx.control_count, "control"), {0, 26}, 26, BLACK)
 		draw_string(ctx.style.font, count_noun(ctx.widget_count, "widget"), {0, 54}, 26, BLACK)
+		draw_string(ctx.style.font, fmt.aprint(ctx.control), {0, 80}, 26, BLACK)
 
 		end()
 

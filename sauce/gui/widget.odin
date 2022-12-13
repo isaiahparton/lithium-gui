@@ -4,20 +4,23 @@ import "core:fmt"
 
 MAX_WIDGETS :: 16
 TITLE_BAR_HEIGHT :: 40
+WidgetIndex :: u8
 
 Widget :: struct {
+	exists: bool,
 	time: f32,
 	title: string,
 	contents: map[Id]int,
-	rect, inner_rect, used_rect: Rectangle,
+	rect, inner_rect: Rectangle,
 	offset, offset_target, space, tex_offset: [2]f32,
-	layer: int,
+	z: int,
+	id: Id,
 	opts: Option_Set,
 }
 
 begin_widget :: proc(rect: Rectangle, title: string, opts: Option_Set, loc := #caller_location) -> bool {
 	using ctx
-	assert(widget_count < MAX_WIDGETS, "begin_widget(): Widget stack overflow")
+	assert(widget_count + 1 < MAX_WIDGETS, "begin_widget(): Widget stack overflow")
 	//--- hash the caller location and lookup ---//
 	id := get_loc_id(loc)
 	idx, ok := widget_map[id]
@@ -26,7 +29,8 @@ begin_widget :: proc(rect: Rectangle, title: string, opts: Option_Set, loc := #c
 		for i := 0; i < MAX_WIDGETS; i += 1 {
 			if !widget_reserved[i] {
 				idx = i
-				widget[i] = {rect=rect}
+				widget[i] = {rect=rect, id=id}
+				append(&widget_stack, i)
 				break
 			}
 			if i == MAX_WIDGETS - 1 {
@@ -38,6 +42,7 @@ begin_widget :: proc(rect: Rectangle, title: string, opts: Option_Set, loc := #c
 	widget_map[id] = idx
 	//--- update widget data ---//
 	self := &widget[idx]
+	self.exists = true
 	self.title = title
 	self.opts = opts
 	self.inner_rect = {
@@ -52,7 +57,7 @@ begin_widget :: proc(rect: Rectangle, title: string, opts: Option_Set, loc := #c
 	//--- current widget state ---//
 	widget_count += 1
 	widget_idx = idx
-	widget_hover = raylib.CheckCollisionPointRec(raylib.GetMousePosition(), self.rect)
+	widget_hover = (active_widget == idx)
 
 	//--- setup surface area for drawing ---//
 	raylib.BeginTextureMode(panel_tex)
@@ -73,11 +78,7 @@ begin_widget :: proc(rect: Rectangle, title: string, opts: Option_Set, loc := #c
 	}
 	max_panel_height = max(max_panel_height, self.rect.height)
 	radius := style.corner_radius * 2
-	if .no_title_bar in opts {
-		draw_rounded_rect(self.rect, radius, CORNER_VERTS, style.colors[.foreground])
-	} else {
-		draw_rounded_rect_pro(self.rect, {0, 0, radius, radius}, CORNER_VERTS, style.colors[.foreground])
-	}
+	draw_rounded_rect(self.rect, radius, CORNER_VERTS, style.colors[.foreground])
 	push_layout()
 	return true
 }
