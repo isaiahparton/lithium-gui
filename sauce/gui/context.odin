@@ -58,6 +58,11 @@ Context :: struct {
 		rect: Rectangle, 
 		res: Result_Set,
 	},
+	// containers are containers
+	cnt_pool: map[Id]int,
+	cnt_data: [MAX_CONTAINERS]Container,
+	cnt_exist: [MAX_CONTAINERS]bool,
+	cnt_idx: int,
 	// widget are containers
 	widget_stack: [dynamic]int,
 	active_widget: int,

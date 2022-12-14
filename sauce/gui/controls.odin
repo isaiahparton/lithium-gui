@@ -14,11 +14,11 @@ Option :: enum {
 	highlighted,
 	hold_focus,
 	draggable,
-	in_loop,
 	inner,
 	uniform,
 	align_center,
 	align_far,
+	allow_scroll,
 }
 Option_Set :: bit_set[Option;u16]
 
@@ -44,10 +44,10 @@ get_id :: proc {
 	get_id_rawptr,
 	get_id_uintptr,
 }
-get_id_string  :: #force_inline proc(str: string) -> Id { 
+get_id_string :: #force_inline proc(str: string) -> Id { 
 	return get_id_bytes(transmute([]byte) str) 
 }
-get_id_rawptr  :: #force_inline proc(data: rawptr, size: int) -> Id { 
+get_id_rawptr :: #force_inline proc(data: rawptr, size: int) -> Id { 
 	return get_id_bytes(([^]u8)(data)[:size])  
 }
 get_id_uintptr :: #force_inline proc(ptr: uintptr) -> Id { 
@@ -176,6 +176,9 @@ end_control :: proc() -> Result_Set {
 	layout.full_rect.height = max(layout.full_rect.height, rect.height + (rect.y - layout.full_rect.y))
 	return res
 }
+end_free_control :: proc() -> Result_Set {
+	return ctx.control_state.res
+}
 
 // get's the next control's rectangle
 get_control_rect :: proc(opts: Option_Set) -> Rectangle {
@@ -186,6 +189,7 @@ get_control_rect :: proc(opts: Option_Set) -> Rectangle {
 	}
 	return get_next_rect(layout.last_rect, layout.size, layout.side, opts)
 }
+
 
 // basic control frame
 @private
@@ -503,10 +507,11 @@ HALF_CHECKBOX_SIZE :: CHECKBOX_SIZE / 2
 checkbox :: proc(value: ^bool, title: string, opts: Option_Set, loc := #caller_location) -> Result_Set {
 	using ctx
 	using raylib
+	layout[layout_idx].size.y = CHECKBOX_SIZE
 	if begin_control(opts, loc) {
 		using control_state
 		prev_width := rect.width
-		rect.width, rect.height = CHECKBOX_SIZE, CHECKBOX_SIZE
+		rect.width = CHECKBOX_SIZE
 		if title != {} {
 			rect.width += measure_string(style.font, title, cast(f32)style.font.baseSize).x + style.text_padding
 		}
@@ -558,9 +563,9 @@ slider :: proc(value: ^f32, min, max: f32, opts: Option_Set, loc := #caller_loca
 	using ctx
 	using raylib
 	opts := opts + {.draggable}
+	layout[layout_idx].size.y = 20
 	if begin_control(opts, loc){
 		using control_state
-		rect.height = 20
 		update_control(opts)
 		baseline := rect.y + 10
 		draw_rounded_rect({rect.x, baseline - 5, rect.width, 10}, 5, 7, style.colors[.fill])
@@ -604,7 +609,7 @@ range_slider :: proc(low, high: ^f32, min, max: f32, opts: Option_Set, loc := #c
 		draw_control_circle(low_point)
 		DrawCircle(i32(low_point.x), i32(low_point.y), 10, style.colors[.accent])
 	}
-	low_knob := end_control()
+	low_knob := end_free_control()
 
 	loc.column += 1
 
@@ -615,7 +620,7 @@ range_slider :: proc(low, high: ^f32, min, max: f32, opts: Option_Set, loc := #c
 		draw_control_circle(high_point)
 		DrawCircle(i32(high_point.x), i32(high_point.y), 10, style.colors[.accent])
 	}
-	high_knob := end_control()
+	high_knob := end_free_control()
 
 	DrawRectangleRec({low_point.x, baseline - 5, (high_point.x - low_point.x), 10}, style.colors[.accent])
 

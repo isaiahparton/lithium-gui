@@ -81,6 +81,12 @@ pop_layout :: proc(){
 	space.y = max(space.y, (self.full_rect.height + self.full_rect.y) - rect.y + offset.y)
 	ctx.layout_idx -= 1
 }
+pop_attached_layout :: proc(){
+	using ctx
+	pop_layout()
+	assert(layout_idx >= 0, "pop_attached_layout(): No layout to attach to")
+	layout[layout_idx].last_rect = layout[layout_idx + 1].full_rect	
+}
 
 layout_set_spacing :: proc(spacing: f32){
 	ctx.layout[ctx.layout_idx].spacing = spacing

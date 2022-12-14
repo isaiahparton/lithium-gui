@@ -44,13 +44,14 @@ main :: proc(){
 				range_slider(&lo, &hi, 0, 100, {})
 				push_attached_layout(.bottom)
 				text(fmt.aprint(lo), .near, .near, {})
-				pop_layout()
+				pop_attached_layout()
 				push_attached_layout(.bottom)
 				text(fmt.aprint(hi), .far, .near, {.align_far})
-				pop_layout()
-				/*if .submit in button("Generate", {}) {
+				pop_attached_layout()
+				layout_set_side(.bottom)
+				if .submit in button("Generate", {}) {
 					fmt.println(rand.float32_range(lo, hi))
-				}*/
+				}
 				end_widget()
 			}
 			if begin_widget({ctx.width / 2 - 450, ctx.height / 2 - 300, 300, 400}, title, {}) {
