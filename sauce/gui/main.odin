@@ -38,17 +38,29 @@ main :: proc(){
 		begin()
 
 		if GetTime() > 1.0 {
+
 			if begin_widget({ctx.width / 2 + 50, ctx.height / 2 - 300, 300, 400}, title, {}) {
 				text_box(&title, "Window title", {})
-				if .submit in button("Open Menu", {}) {
-
-				}
+				range_slider(&lo, &hi, 0, 100, {})
+				push_attached_layout(.bottom)
+				text(fmt.aprint(lo), .near, .near, {})
+				pop_layout()
+				push_attached_layout(.bottom)
+				text(fmt.aprint(hi), .far, .near, {.align_far})
+				pop_layout()
+				/*if .submit in button("Generate", {}) {
+					fmt.println(rand.float32_range(lo, hi))
+				}*/
 				end_widget()
 			}
 			if begin_widget({ctx.width / 2 - 450, ctx.height / 2 - 300, 300, 400}, title, {}) {
 				checkbox(&val, "Menu bars", {})
 				slider(&ctx.style.corner_radius, 0, 10, {})
 				text(fmt.aprint(ctx.style.corner_radius), .near, .near, {})
+				for i in 0..=24 {
+					ctx.loc_offset = i
+					button(fmt.aprintf("button %i", i), {})
+				}
 				end_widget()
 			}
 		}
@@ -56,7 +68,6 @@ main :: proc(){
 		draw_string(ctx.style.font, fmt.aprintf("%i fps", GetFPS()), {0, 0}, 26, BLACK)
 		draw_string(ctx.style.font, count_noun(ctx.control_count, "control"), {0, 26}, 26, BLACK)
 		draw_string(ctx.style.font, count_noun(ctx.widget_count, "widget"), {0, 54}, 26, BLACK)
-		draw_string(ctx.style.font, fmt.aprint(ctx.control), {0, 80}, 26, BLACK)
 
 		end()
 

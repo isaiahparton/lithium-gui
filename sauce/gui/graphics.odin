@@ -45,47 +45,6 @@ draw_circle_gradient :: proc(x, y, radius, start, end: f32, color1, color2: Colo
     rlEnd()
 }
 
-draw_shadow :: proc(rect: Rectangle, radius, scale: f32, color: Color) {
-    using raylib
-    size := radius + scale
-    draw_circle_gradient(math.round(rect.x + radius), math.round(rect.y + radius), size, 180.0, 270.0, color, BLANK)
-    draw_circle_gradient(math.round(rect.x + radius), math.round(rect.y + rect.height - radius), size, 270.0, 360.0, color, BLANK)
-    draw_circle_gradient(math.round(rect.x + rect.width - radius), math.round(rect.y + radius), size, 90.0, 180.0, color, BLANK)
-    draw_circle_gradient(math.round(rect.x + rect.width - radius), math.round(rect.y + rect.height - radius), size, 0.0, 90.0, color, BLANK)
-    DrawRectangleGradientH(
-        i32(rect.x + radius - size), 
-        i32(rect.y + radius), 
-        i32(size), 
-        i32(rect.height - (radius * 2)), 
-        BLANK, 
-        color,
-    )
-    DrawRectangleGradientH(
-        i32(rect.x + rect.width - radius), 
-        i32(rect.y + radius), 
-        i32(size), 
-        i32(rect.height - (radius * 2)), 
-        color, 
-        BLANK,
-    )
-    DrawRectangleGradientV(
-        i32(rect.x + radius), 
-        i32(rect.y + radius - size), 
-        i32(rect.width - (radius * 2)), 
-        i32(size), 
-        BLANK, 
-        color,
-    )
-    DrawRectangleGradientV(
-        i32(rect.x + radius), 
-        i32(rect.y + rect.height - radius), 
-        i32(rect.width - (radius * 2)), 
-        i32(size), 
-        color, 
-        BLANK,
-    )
-}
-
 draw_render_surface :: proc(surf: raylib.RenderTexture, src, dst: Rectangle, tint: Color) {
     raylib.DrawTexturePro(surf.texture, { src.x, -src.y - src.height, src.width, -src.height }, dst, { 0, 0 }, -0.01, tint)
 }

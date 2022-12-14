@@ -130,8 +130,8 @@ init_default_style :: proc(){
 	colors[.accent] = {17, 173, 163, 255}
 	text_padding = 6
 	outline_thick = 1.1
-	padding = 16
-	spacing = 14
+	padding = 20
+	spacing = 16
 	corner_radius = 0
 	icon_size = 24
 	font = raylib.LoadFontEx("./fonts/Muli-SemiBold.ttf", 26, nil, 1024)
@@ -282,11 +282,12 @@ end :: proc(){
 		rlTranslatef(rect.x + half_width, rect.y + half_height, 0)
 		if widget_reserved[i] {
 			rlScalef(1.1 - time * 0.1, 1.1 - time * 0.1, 0)
-			time += (1 - time) * FADE_SPEED * GetFrameTime()
+			time += FADE_SPEED * GetFrameTime()
 		} else {
 			rlScalef(0.9 + time * 0.1, 0.9 + time * 0.1, 0)
-			time -= time * FADE_SPEED * GetFrameTime()
+			time -= FADE_SPEED * GetFrameTime()
 		}
+		time = clamp(time, 0, 1)
 		dst := Rectangle{-half_width, -half_height, rect.width, rect.height}
 		DrawTextureNPatch(shadow_tex, shadow_npatch, {dst.x - 40, dst.y - 40, dst.width + 80, dst.height + 80}, {0, 0}, 0, WHITE)
 		radius := style.corner_radius * 2

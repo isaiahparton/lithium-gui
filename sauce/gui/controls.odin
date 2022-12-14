@@ -182,7 +182,7 @@ get_control_rect :: proc(opts: Option_Set) -> Rectangle {
 	layout := &ctx.layout[ctx.layout_idx]
 	if layout.last_rect == {} {
 		rect := ctx.widget[ctx.widget_idx].inner_rect
-		return {rect.x, rect.y, rect.width, layout.size.y}
+		return {rect.x - ctx.widget[ctx.widget_idx].offset.x, rect.y - ctx.widget[ctx.widget_idx].offset.y, rect.width, layout.size.y}
 	}
 	return get_next_rect(layout.last_rect, layout.size, layout.side, opts)
 }
@@ -514,15 +514,14 @@ checkbox :: proc(value: ^bool, title: string, opts: Option_Set, loc := #caller_l
 		state_time := &control.state_time[idx]
 		center := [2]f32{rect.x + HALF_CHECKBOX_SIZE, rect.y + HALF_CHECKBOX_SIZE}
 		draw_control_circle(center)
-		fill := Fade(style.colors[.highlight], state_time^)
 		draw_rounded_rect_lines({rect.x + 2, rect.y + 2, CHECKBOX_SIZE - 4, CHECKBOX_SIZE - 4}, style.corner_radius, CORNER_VERTS, 2, style.colors[.highlight])
-		draw_rounded_rect({rect.x, rect.y, CHECKBOX_SIZE, CHECKBOX_SIZE}, style.corner_radius, CORNER_VERTS, fill)
 		if value^ {
+			draw_rounded_rect({rect.x, rect.y, CHECKBOX_SIZE, CHECKBOX_SIZE}, style.corner_radius, CORNER_VERTS, style.colors[.highlight])
 			time1 := min(state_time^, 0.5) * 2
 			time2 := max(min(state_time^ - 0.5, 0.5), 0.0) * 2
 			DrawLineEx({rect.x + 4, rect.y + 12}, {rect.x + 4 + (6 * time1), rect.y + 12 + (6 * time1)}, 2.0, style.colors[.foreground])
 			DrawLineEx({rect.x + 9, rect.y + 18}, {rect.x + 9 + (11 * time2), rect.y + 18 - (11 * time2)}, 2.0, style.colors[.foreground])
-			state_time^ += (1.0 - state_time^) * 15 * GetFrameTime()
+			state_time^ += (1.0 - state_time^) * 12 * GetFrameTime()
 		} else {
 			/*if (state_time^ > 0.01) {
 				time2 := min(state_time^, 0.5) * 2
@@ -530,7 +529,7 @@ checkbox :: proc(value: ^bool, title: string, opts: Option_Set, loc := #caller_l
 				DrawLineEx({rect.x + 10, rect.y + 18}, {rect.x + 10 - (6 * time1), rect.y + 18 - (6 * time1)}, 2.0, style.colors[.foreground])
 				DrawLineEx({rect.x + 20, rect.y + 7}, {rect.x + 20 - (11 * time2), rect.y + 7 + (11 * time2)}, 2.0, style.colors[.foreground])
 			}*/
-			state_time^ -= state_time^ * 15 * GetFrameTime()
+			state_time^ -= state_time^ * 12 * GetFrameTime()
 		}
 		draw_aligned_string(style.font, title, {rect.x + rect.width, rect.y + rect.height / 2}, cast(f32)style.font.baseSize, style.colors[.text], .far, .center)
 		if .submit in res {
