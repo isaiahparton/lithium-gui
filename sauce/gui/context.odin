@@ -43,6 +43,7 @@ DOUBLE_CLICK_TIME :: 0.275
 Context :: struct {
 	// input
 	mouse_point, drag_from: [2]f32,
+	dragging: bool,
 	// uh
 	hover_id, prev_hover_id, focus_id, prev_focus_id: Id,
 	click, double_click: bool,
@@ -83,7 +84,6 @@ Context :: struct {
 	cursor: Cursor,
 	hover_text: bool,
 	text_offset: f32,
-	text_offset_trg: f32,
 	cursor_move: int,
 	// key input
 	first_key, prev_first_key: KeyboardKey,
@@ -208,6 +208,7 @@ begin :: proc(){
 	}
 	hover_id = 0
 	hover_text = false
+	dragging = false
 }
 end :: proc(){
 	using ctx
@@ -245,7 +246,7 @@ end :: proc(){
 		if IsMouseButtonDown(.MIDDLE) {
 			SetMouseCursor(.RESIZE_ALL)
 		} else {
-			if hover_id != 0 || focus_id != 0 {
+			if hover_id != 0 || dragging {
 				if hover_text {
 					SetMouseCursor(.IBEAM)
 				} else {
