@@ -9,20 +9,12 @@ import "core:math/rand"
 main :: proc(){
 	using raylib
 
-	frame := 0
-	title := ""
-	{
-		data, ok := os.read_entire_file("title.txt")
-		if ok {
-			title = string(data)
-		}
-	}
 	val := false
 	lo, hi := f32(0), f32(100)
-	num := f32(0)
+	text1, text2 := "", ""
 
 	SetConfigFlags({.WINDOW_RESIZABLE})//, .MSAA_4X_HINT})
-	InitWindow(1400, 900, strings.clone_to_cstring(title))
+	InitWindow(1400, 900, "lithium-gui demo")
 	SetTargetFPS(300)
 
 	init_context()
@@ -37,33 +29,21 @@ main :: proc(){
 
 		begin()
 
-		if GetTime() > 1.0 {
-
-			if begin_widget({ctx.width / 2 + 50, ctx.height / 2 - 300, 300, 400}, title, {}) {
-				text_box(&title, "Window title", {})
-				range_slider(&lo, &hi, 0, 100, {})
-				push_attached_layout(.bottom)
-				text(fmt.aprint(lo), .near, .near, {})
-				pop_attached_layout()
-				push_attached_layout(.bottom)
-				text(fmt.aprint(hi), .far, .near, {.align_far})
-				pop_attached_layout()
-				layout_set_side(.bottom)
-				if .submit in button("Generate", {}) {
-					fmt.println(rand.float32_range(lo, hi))
-				}
-				end_widget()
-			}
-			if begin_widget({ctx.width / 2 - 450, ctx.height / 2 - 300, 300, 400}, title, {}) {
-				checkbox(&val, "Menu bars", {})
-				slider(&ctx.style.corner_radius, 0, 10, {})
-				text(fmt.aprint(ctx.style.corner_radius), .near, .near, {})
-				for i in 0..=24 {
-					ctx.loc_offset = i
-					button(fmt.aprintf("button %i", i), {})
-				}
-				end_widget()
-			}
+		if begin_widget({ctx.width / 2 + 50, ctx.height / 2 - 300, 300, 400}, "Main Stuff", {}) {
+			text("fancy text input", .near, .near, {})
+			fancy_text_box(&text1, "Type something here", {})
+			text("regular text input", .near, .near, {})
+			text_box(&text2, {})
+			checkbox(&val, "On" if val else "Off", {})
+			button("CLICK ME", {})
+			button("SUBTLE", {.subtle})
+			end_widget()
+		}
+		if begin_widget({ctx.width / 2 - 450, ctx.height / 2 - 300, 300, 400}, "Other Stuff", {}) {
+			text(fmt.aprintf("Corner radius: %f", ctx.style.corner_radius), .near, .near, {})
+			slider(&ctx.style.corner_radius, 0, 10, {})
+			//300 * (value^ / (min - max))knob(&ctx.style.corner_radius, 0, 10, "hi",  {})
+			end_widget()
 		}
 
 		draw_string(ctx.style.font, fmt.aprintf("%i fps", GetFPS()), {0, 0}, 26, BLACK)
@@ -72,13 +52,10 @@ main :: proc(){
 
 		end()
 
-		frame += 1
 		//fmt.println(frame)
 		
 		//DrawFPS(0, 0)
 
 		EndDrawing()
 	}
-
-	os.write_entire_file("title.txt", transmute([]u8)title, true)
 }	

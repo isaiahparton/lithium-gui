@@ -43,6 +43,7 @@ DOUBLE_CLICK_TIME :: 0.275
 Context :: struct {
 	// input
 	mouse_point, drag_from: [2]f32,
+	dragging: bool,
 	// uh
 	hover_id, prev_hover_id, focus_id, prev_focus_id: Id,
 	click, double_click: bool,
@@ -57,6 +58,7 @@ Context :: struct {
 		id: Id, 
 		rect: Rectangle, 
 		res: Result_Set,
+		opts: Option_Set,
 	},
 	// containers are containers
 	cnt_pool: map[Id]int,
@@ -83,7 +85,6 @@ Context :: struct {
 	cursor: Cursor,
 	hover_text: bool,
 	text_offset: f32,
-	text_offset_trg: f32,
 	cursor_move: int,
 	// key input
 	first_key, prev_first_key: KeyboardKey,
@@ -208,6 +209,7 @@ begin :: proc(){
 	}
 	hover_id = 0
 	hover_text = false
+	dragging = false
 }
 end :: proc(){
 	using ctx
@@ -239,22 +241,14 @@ end :: proc(){
 		control.exists = false
 	}
 
-	if widget_resize {
-		SetMouseCursor(.RESIZE_NWSE)
-	} else {
-		if IsMouseButtonDown(.MIDDLE) {
-			SetMouseCursor(.RESIZE_ALL)
+	if hover_id != 0 || focus_id != 0 {
+		if hover_text {
+			SetMouseCursor(.IBEAM)
 		} else {
-			if hover_id != 0 || focus_id != 0 {
-				if hover_text {
-					SetMouseCursor(.IBEAM)
-				} else {
-					SetMouseCursor(.POINTING_HAND)
-				}
-			} else {
-				SetMouseCursor(.DEFAULT)
-			}
+			SetMouseCursor(.POINTING_HAND)
 		}
+	} else {
+		SetMouseCursor(.DEFAULT)
 	}
 
 	active_widget = -1
@@ -297,16 +291,6 @@ end :: proc(){
 		DrawTextureNPatch(shadow_tex, shadow_npatch, {dst.x - 40, dst.y - 40, dst.width + 80, dst.height + 80}, {0, 0}, 0, WHITE)
 		radius := style.corner_radius * 2
 		draw_render_surface(panel_tex, {tex_offset.x, tex_offset.y, rect.width, rect.height}, dst, Fade(WHITE, self.time))
-		if i == widget_drag && widget_resize {
-			if IsMouseButtonDown(.LEFT) {
-				rect.width = mouse_point.x - rect.x
-				rect.height = mouse_point.y - rect.y
-				rect.width = max(rect.width, 96)
-				rect.height = max(rect.height, 48)
-			} else if IsMouseButtonReleased(.LEFT) {
-				widget_resize = false
-			}
-		}
 		rlPopMatrix()
 
 		if !self.exists {
