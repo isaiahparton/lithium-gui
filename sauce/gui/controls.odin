@@ -217,8 +217,8 @@ text_box :: proc(content: ^string, opts: Option_Set, loc := #caller_location) ->
 	using ctx
 	using raylib
 	ctx.layout[ctx.layout_idx].size.y = f32(style.font.baseSize) + style.text_padding * 2
-	if begin_control(opts, loc) {
-		update_control(opts + {.hold_focus})
+	if begin_control(opts + {.hold_focus}, loc) {
+		update_control()
 		using control_state
 		if .just_focused in res {
 			cursor.index = -1
@@ -466,7 +466,7 @@ FANCY_TEXT_BOX_HEIGHT :: 55
 fancy_text_box :: proc(content: ^string, title: string, opts: Option_Set, loc := #caller_location) -> Result_Set {
 	using ctx
 	using raylib
-	ctx.layout[ctx.layout_idx].size.y = TEXT_BOX_HEIGHT
+	ctx.layout[ctx.layout_idx].size.y = FANCY_TEXT_BOX_HEIGHT
 	if begin_control(opts + {.hold_focus}, loc) {
 		update_control()
 		using control_state
@@ -728,7 +728,7 @@ button :: proc(title: string, opts: Option_Set, loc := #caller_location) -> Resu
 	layout[layout_idx].size.y = BUTTON_HEIGHT
 	if begin_control(opts, loc) {
 		using control_state
-		update_control(opts)
+		update_control()
 		if .subtle in opts {
 			draw_rounded_rect(rect, style.corner_radius, CORNER_VERTS, Fade(BLACK, control.hover_time[idx] * 0.1))
 			scale := control.focus_time[idx]
@@ -740,6 +740,14 @@ button :: proc(title: string, opts: Option_Set, loc := #caller_location) -> Resu
 			draw_rounded_rect_lines(expand_rect(rect, -2), style.corner_radius, CORNER_VERTS, 2.0, style.colors[.text])
 			draw_aligned_string(style.font, title, {rect.x + rect.width / 2, rect.y + rect.height / 2}, cast(f32)style.font.baseSize, style.colors[.text], .center, .center)
 		} else {
+			draw_rounded_rect(rect, style.corner_radius, CORNER_VERTS, blend_colors(style.colors[.highlight], WHITE, control.hover_time[idx] * 0.1))
+			scale := control.focus_time[idx]
+			if .focus in res {
+				draw_rounded_rect({rect.x + (rect.width / 2) * (1 - scale), rect.y + (rect.height / 2) * (1 - scale), rect.width * scale, rect.height * scale}, style.corner_radius, CORNER_VERTS, Fade(WHITE, scale * 0.1))
+			} else {
+				draw_rounded_rect(rect, style.corner_radius, CORNER_VERTS, Fade(WHITE, scale * 0.1))
+			}
+			draw_aligned_string(style.font, title, {rect.x + rect.width / 2, rect.y + rect.height / 2}, cast(f32)style.font.baseSize, style.colors[.foreground], .center, .center)
 		}
 	}
 	return end_control()
@@ -756,7 +764,7 @@ knob :: proc(value: ^f32, min, max: f32, title: string, opts: Option_Set, loc :=
 	layout[layout_idx].size = {KNOB_SIZE, KNOB_SIZE}
 	if begin_control(opts, loc) {
 		using control_state
-		update_control(opts)
+		update_control()
 		center := Vector2{rect.x + 20, rect.y + 20}
 		DrawCircleV(center, KNOB_RAD, blend_colors(style.colors[.highlight], WHITE, 0.2 + control.hover_time[idx] * 0.1))
 		angle := 300 * (value^ / (min - max))
@@ -774,10 +782,9 @@ HALF_CHECKBOX_SIZE :: CHECKBOX_SIZE / 2
 checkbox :: proc(value: ^bool, title: string, opts: Option_Set, loc := #caller_location) -> Result_Set {
 	using ctx
 	using raylib
-	layout[layout_idx].size.y = CHECKBOX_SIZE
+	layout[layout_idx].size = {CHECKBOX_SIZE, CHECKBOX_SIZE}
 	if begin_control(opts, loc) {
 		using control_state
-		prev_width := rect.width
 		rect.width = CHECKBOX_SIZE
 		if title != {} {
 			text_width := measure_string(style.font, title, cast(f32)style.font.baseSize).x + style.text_padding * 2
@@ -807,7 +814,6 @@ checkbox :: proc(value: ^bool, title: string, opts: Option_Set, loc := #caller_l
 		if .submit in res {
 			value^ = !value^
 		}
-		rect.width = prev_width
 	}
 	return end_control()
 }
@@ -872,7 +878,7 @@ range_slider :: proc(low, high: ^f32, min, max: f32, opts: Option_Set, loc := #c
 	low_rect := Rectangle{low_point.x - 10, low_point.y - 10, 20, 20}
 	if begin_free_control(low_rect, opts + {.draggable}, loc) {
 		using control_state
-		update_control(opts + {.draggable})
+		update_control()
 		//draw_control_circle(low_point)
 		DrawCircle(i32(low_point.x), i32(low_point.y), 10, style.colors[.accent])
 	}
@@ -883,7 +889,7 @@ range_slider :: proc(low, high: ^f32, min, max: f32, opts: Option_Set, loc := #c
 	high_rect := Rectangle{high_point.x - 10, high_point.y - 10, 20, 20}
 	if begin_free_control(high_rect, opts + {.draggable}, loc) {
 		using control_state
-		update_control(opts + {.draggable})
+		update_control()
 		//draw_control_circle(high_point)
 		DrawCircle(i32(high_point.x), i32(high_point.y), 10, style.colors[.accent])
 	}

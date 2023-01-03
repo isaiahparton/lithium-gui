@@ -68,7 +68,6 @@ begin_widget :: proc(rect: Rectangle, title: string, opts: Option_Set, loc := #c
 	}
 	raylib.rlPushMatrix()
 	raylib.rlTranslatef(tex_offset.x - self.rect.x, tex_offset.y - self.rect.y, 0)
-	raylib.BeginScissorMode(i32(tex_offset.x), i32(tex_offset.y), i32(self.rect.width), i32(self.rect.height))
 	self.tex_offset = tex_offset
 	if tex_offset.x + self.rect.width > f32(panel_tex.texture.width) {
 		tex_offset.x = 0
@@ -85,7 +84,6 @@ begin_widget :: proc(rect: Rectangle, title: string, opts: Option_Set, loc := #c
 end_widget :: proc(){
 	using ctx
 	pop_layout()
-	raylib.EndScissorMode()
 	raylib.rlPopMatrix()
 	raylib.EndTextureMode()
 

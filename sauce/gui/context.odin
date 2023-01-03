@@ -226,22 +226,23 @@ end :: proc(){
 			continue
 		}
 		id := control.id[i]
+		delta := 7 * GetFrameTime()
 		if id == hover_id {
-			control.hover_time[i] += 7 * GetFrameTime()
+			control.hover_time[i] += delta
 		} else {
-			control.hover_time[i] -= 7 * GetFrameTime()
+			control.hover_time[i] -= delta
 		}
 		control.hover_time[i] = clamp(control.hover_time[i], 0, 1)
 		if id == focus_id {
-			control.focus_time[i] += 7 * GetFrameTime()
+			control.focus_time[i] += delta
 		} else {
-			control.focus_time[i] -= 7 * GetFrameTime()
+			control.focus_time[i] -= delta
 		}
 		control.focus_time[i] = clamp(control.focus_time[i], 0, 1)
 		control.exists = false
 	}
 
-	if hover_id != 0 || focus_id != 0 {
+	if hover_id != 0 || dragging {
 		if hover_text {
 			SetMouseCursor(.IBEAM)
 		} else {
