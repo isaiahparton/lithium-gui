@@ -207,258 +207,252 @@ get_control_rect :: proc(opts: Option_Set) -> Rectangle {
 
 // basic control frame
 @private
-draw_control_frame :: proc(rect: Rectangle, fill: Color){
+draw_rect :: proc(rect: Rectangle, fill: Color){
 	using ctx
-	draw_rounded_rect(rect, style.corner_radius, CORNER_VERTS, fill)
+	raylib.DrawTextureNPatch(rect_tex, rect_npatch, rect, {}, 0, fill)
 }
 
 // text input
+mutable_text :: proc(rect: Rectangle, res: ^Result_Set, content: ^string) {
+	using ctx
+	if .hover in res {
+		hover_text = true
+	}
+	using raylib
+	if .just_focused in res {
+		cursor.index = -1
+		cursor.length = 0
+		text_offset = 0
+		clear(&buffer)
+		append_elem_string(&buffer, content^)
+	}
+	font := &style.font
+	font_height := f32(font.baseSize)
+	// if data was altered this step
+	changed := false
+	// Draw text to find lines
+	y := rect.y + rect.height / 2 - font_height / 2
+	x := rect.x + style.text_padding
+	max_offset := f32(0)
+	cursor_min_x, cursor_max_x := f32(0), f32(0)
+	if .focus in res {
+		x -= text_offset
+	}
+	min_dist := rect.width
+	mouse_index := len(content)
+	for i := 0; i <= len(content); {
+		bytecount := 1
+		codepoint : rune = 0
+		if i < len(content) {
+			codepoint, bytecount = utf8.decode_rune_in_string(content[i:])
+		}
+        index := GetGlyphIndex(font^, codepoint)
+        rune_width := f32(font.chars[index].advanceX) if (font.chars[index].advanceX != 0) else font.recs[index].width + f32(font.chars[index].offsetX)
+        if i == cursor.index {
+        	cursor_min_x, cursor_max_x = max_offset, max_offset
+        } else if i == cursor.index + cursor.length {
+        	cursor_max_x = max_offset
+        }
+        if x + rune_width < rect.x {
+        	i += bytecount
+        	x += rune_width
+        	max_offset += rune_width
+        	continue
+        }
+        dist := abs(f32(GetMouseX()) - x)
+        if dist < min_dist {
+        	min_dist = dist
+        	mouse_index = i
+        }
+        max_offset += rune_width
+        // Draw cursor
+        highlight := false
+        if .focus in res {
+        	if cursor.length == 0 && x > rect.x && x < rect.x + rect.width {
+	    		if i == cursor.index {
+	    			h := font_height * (0.5 + abs(math.sin_f32(f32(GetTime() * 7))) * 0.5)
+	    			DrawRectangleRec({x - 1, y + font_height / 2 - h / 2, 2, h}, style.colors[.text])
+	    		}
+	    	} else if i >= cursor.index && i < cursor.index + cursor.length {
+	        	DrawRectangleRec({max(x, rect.x), y, min(rect.width - (x - rect.x), rune_width + 1), font_height}, style.colors[.text])
+	        	highlight = true
+	        }
+        } else {
+        	if x > rect.x + rect.width {
+				break
+			}
+        }
+        if i == len(content) {
+        	break
+        }
+        if x < rect.x + rect.width {
+			draw_rune_pro(font^, codepoint, {x, y}, {rect.x, rect.y, (rect.x + rect.width) - x, rect.height}, font_height, style.colors[.fill] if highlight else style.colors[.text])
+        }
+		x += rune_width
+		i += bytecount
+	}
+	if .focus not_in res {
+		return
+	}
+	if .hover in res {
+		if double_click {
+			cursor.index = 0
+			cursor.length = len(content)
+		} else {
+			if IsMouseButtonPressed(.LEFT) && mouse_index != -1 {
+				cursor.drag_from = mouse_index
+			}
+		}
+	}
+	if IsMouseButtonDown(.LEFT) {
+		if mouse_index < cursor.drag_from {
+			cursor.index = mouse_index
+			cursor.length = cursor.drag_from - cursor.index
+		} else {
+			cursor.index = cursor.drag_from
+			cursor.length = mouse_index - cursor.index
+		}
+		mouse_x := f32(GetMouseX())
+		if mouse_x < rect.x {
+			text_offset += (mouse_x - rect.x) * 0.01
+		} else if mouse_x > rect.x + rect.width {
+			text_offset += (mouse_x - (rect.x + rect.width)) * 0.01
+		}
+	}
+	if cursor_move > 0 {
+		limit := rect.width - style.text_padding * 2
+		if cursor_max_x > text_offset + limit {
+			text_offset = cursor_max_x - limit
+		}
+	} else if cursor_move < 0 {
+		if cursor_min_x < text_offset + style.text_padding {
+			text_offset = cursor_min_x - style.text_padding
+		}
+	}
+	cursor_move = 0
+	if get_key_held(.LEFT) {
+		cursor_move = -1
+		delta := 0
+		if is_ctrl_down() {
+			delta = quick_seek_buffer(&buffer, cursor.index, true) - cursor.index
+		}
+		else{
+			_, delta = utf8.decode_last_rune_in_bytes(buffer[:cursor.index])
+			delta = -delta
+		}
+		if is_shift_down() {
+			cursor.index += delta
+			if cursor.index >= 0 {
+				cursor.length -= delta
+			}
+		} else {
+			if cursor.length == 0 {
+				cursor.index += delta
+			}
+			cursor.length = 0
+		}
+		if cursor.index < 0 do cursor.index = 0
+	}
+	if get_key_held(.RIGHT) {
+		cursor_move = 1
+		delta := 0
+		if is_ctrl_down() {
+			delta = quick_seek_buffer(&buffer, cursor.index + cursor.length, false) - cursor.index + 1
+		}
+		else{
+			_, delta = utf8.decode_rune_in_bytes(buffer[cursor.index + cursor.length:])
+		}
+		if is_shift_down() {
+			cursor.length += delta
+		} else {
+			if cursor.length > 0 {
+				cursor.index += cursor.length
+			} else {
+				cursor.index += delta
+			}
+			cursor.length = 0
+		}
+		if cursor.length == 0 {
+			if cursor.index > len(buffer) {
+				cursor.index = len(buffer)
+			}
+		} else {
+			if cursor.index + cursor.length > len(buffer) {
+				cursor.length = len(buffer) - cursor.index
+			}
+		}
+	}
+	if rune_count > 0 {
+		insert_runes_to_buffer(&buffer, runes[0:rune_count])
+		changed = true
+		cursor_move = 1
+	}
+	if len(buffer) != 0 {
+		at_end := (len(buffer) == cursor.index)
+
+		if get_key_held(.DELETE) && !at_end {
+			erase_from_buffer(&buffer)
+			changed = true
+			cursor_move = -1
+		}
+		else if get_key_held(.BACKSPACE) {
+			if is_ctrl_down() {
+				idx := quick_seek_buffer(&buffer, cursor.index, true)
+				remove_range(&buffer, idx, cursor.index)
+				cursor.index = idx
+			} else {
+				backspace_buffer(&buffer)
+			}
+			changed = true
+			cursor_move = -1
+		}
+	}
+	if is_ctrl_down() {
+		if IsKeyPressed(.A) {
+			cursor.index = 0
+			cursor.length = len(buffer)
+		}
+		if IsKeyPressed(.V) {
+			str := strings.clone_from_cstring(GetClipboardText())
+			if len(str) > 0 {
+				insert_string_to_buffer(&buffer, str)
+				changed = true
+				cursor_move = 1
+			}
+		}
+		if IsKeyPressed(.C) {
+			SetClipboardText(strings.clone_to_cstring(cast(string)buffer[cursor.index:cursor.index + cursor.length]))
+		}
+		if IsKeyPressed(.X) {
+			SetClipboardText(strings.clone_to_cstring(cast(string)buffer[cursor.index:cursor.index + cursor.length]))
+			erase_from_buffer(&buffer)
+			changed = true
+			cursor_move = -1
+		}
+	}
+	if changed {
+		res^ += {.change}
+		content^ = strings.clone_from_bytes(buffer[:])
+	}
+	text_offset = max(text_offset, 0)
+	limit := rect.width - style.text_padding
+	if text_offset + max_offset >= limit {
+		text_offset = min(text_offset, max_offset - limit)
+	}
+	if max_offset < limit {
+		text_offset = 0
+	}
+}
 text_box :: proc(content: ^string, opts: Option_Set, loc := #caller_location) -> Result_Set {
 	using ctx
 	using raylib
 	ctx.layout[ctx.layout_idx].size.y = f32(style.font.baseSize) + style.text_padding * 2
 	if begin_control(opts + {.hold_focus}, loc) {
-		update_control()
 		using control_state
-		if .just_focused in res {
-			cursor.index = -1
-			cursor.length = 0
-			text_offset = 0
-			clear(&buffer)
-			append_elem_string(&buffer, content^)
-		}
-
-		font := &style.font
-		font_height := f32(font.baseSize)
+		update_control()
 		fill := blend_colors(style.colors[.fill], BLACK, min(1, control.hover_time[idx] + control.focus_time[idx]) * 0.1)
 		draw_rounded_rect(rect, style.corner_radius, CORNER_VERTS, fill)
-
-		// if data was altered this step
-		changed := false
-		// Draw text to find lines
-		y := rect.y + rect.height / 2 - font_height / 2
-		x := rect.x + style.text_padding
-		max_offset := f32(0)
-		cursor_min_x, cursor_max_x := f32(0), f32(0)
-		if .focus in res {
-			x -= text_offset
-		}
-		min_dist := rect.width
-		mouse_index := len(content)
-		for i := 0; i <= len(content); {
-			bytecount := 1
-			codepoint : rune = 0
-			if i < len(content) {
-				codepoint, bytecount = utf8.decode_rune_in_string(content[i:])
-			}
-	        index := GetGlyphIndex(font^, codepoint)
-
-	        rune_width := f32(font.chars[index].advanceX) if (font.chars[index].advanceX != 0) else font.recs[index].width + f32(font.chars[index].offsetX)
-	        if i == cursor.index {
-	        	cursor_min_x, cursor_max_x = max_offset, max_offset
-	        } else if i == cursor.index + cursor.length {
-	        	cursor_max_x = max_offset
-	        }
-	        if x + rune_width < rect.x {
-	        	i += bytecount
-	        	x += rune_width
-	        	max_offset += rune_width
-	        	continue
-	        }
-
-	        dist := abs(f32(GetMouseX()) - x)
-	        if dist < min_dist {
-	        	min_dist = dist
-	        	mouse_index = i
-	        }
-
-	        max_offset += rune_width
-
-	        // Draw cursor
-	        highlight := false
-	        if .focus in res {
-	        	if cursor.length == 0 && x > rect.x && x < rect.x + rect.width {
-		    		if i == cursor.index {
-		    			h := font_height * (0.5 + abs(math.sin_f32(f32(GetTime() * 7))) * 0.5)
-		    			DrawRectangleRec({x - 1, y + font_height / 2 - h / 2, 2, h}, style.colors[.text])
-		    		}
-		    	} else if i >= cursor.index && i < cursor.index + cursor.length {
-		        	DrawRectangleRec({max(x, rect.x), y, min(rect.width - (x - rect.x), rune_width + 1), font_height}, style.colors[.text])
-		        	highlight = true
-		        }
-	        } else {
-	        	if x > rect.x + rect.width {
-					break
-				}
-	        }
-
-	        if i == len(content) {
-	        	break
-	        }
-
-	        if x < rect.x + rect.width {
-				draw_rune_pro(font^, codepoint, {x, y}, {rect.x, rect.y, (rect.x + rect.width) - x, rect.height}, font_height, style.colors[.fill] if highlight else style.colors[.text])
-	        }
-			x += rune_width
-			i += bytecount
-		}
-
-		if .hover in res {
-			hover_text = true
-		}
-
-		if .focus in res {
-			if .hover in res {
-				if double_click {
-					cursor.index = 0
-					cursor.length = len(content)
-				} else {
-					if IsMouseButtonPressed(.LEFT) && mouse_index != -1 {
-						cursor.drag_from = mouse_index
-					}
-				}
-			}
-
-			if IsMouseButtonDown(.LEFT) {
-				if mouse_index < cursor.drag_from {
-					cursor.index = mouse_index
-					cursor.length = cursor.drag_from - cursor.index
-				} else {
-					cursor.index = cursor.drag_from
-					cursor.length = mouse_index - cursor.index
-				}
-				mouse_x := f32(GetMouseX())
-				if mouse_x < rect.x {
-					text_offset += (mouse_x - rect.x) * 0.01
-				} else if mouse_x > rect.x + rect.width {
-					text_offset += (mouse_x - (rect.x + rect.width)) * 0.01
-				}
-			}
-			if cursor_move > 0 {
-				limit := rect.width - style.text_padding * 2
-				if cursor_max_x > text_offset + limit {
-					text_offset = cursor_max_x - limit
-				}
-			} else if cursor_move < 0 {
-				if cursor_min_x < text_offset + style.text_padding {
-					text_offset = cursor_min_x - style.text_padding
-				}
-			}
-			cursor_move = 0
-			if get_key_held(.LEFT) {
-				cursor_move = -1
-				delta := 0
-				if is_ctrl_down() {
-					delta = quick_seek_buffer(&buffer, cursor.index, true) - cursor.index
-				}
-				else{
-					_, delta = utf8.decode_last_rune_in_bytes(buffer[:cursor.index])
-					delta = -delta
-				}
-				if is_shift_down() {
-					cursor.index += delta
-					if cursor.index >= 0 {
-						cursor.length -= delta
-					}
-				} else {
-					if cursor.length == 0 {
-						cursor.index += delta
-					}
-					cursor.length = 0
-				}
-				if cursor.index < 0 do cursor.index = 0
-			}
-			if get_key_held(.RIGHT) {
-				cursor_move = 1
-				delta := 0
-				if is_ctrl_down() {
-					delta = quick_seek_buffer(&buffer, cursor.index + cursor.length, false) - cursor.index + 1
-				}
-				else{
-					_, delta = utf8.decode_rune_in_bytes(buffer[cursor.index + cursor.length:])
-				}
-				if is_shift_down() {
-					cursor.length += delta
-				} else {
-					if cursor.length > 0 {
-						cursor.index += cursor.length
-					} else {
-						cursor.index += delta
-					}
-					cursor.length = 0
-				}
-				if cursor.length == 0 {
-					if cursor.index > len(buffer) {
-						cursor.index = len(buffer)
-					}
-				} else {
-					if cursor.index + cursor.length > len(buffer) {
-						cursor.length = len(buffer) - cursor.index
-					}
-				}
-			}
-			if rune_count > 0 {
-				insert_runes_to_buffer(&buffer, runes[0:rune_count])
-				changed = true
-				cursor_move = 1
-			}
-			if len(buffer) != 0 {
-				at_end := (len(buffer) == cursor.index)
-
-				if get_key_held(.DELETE) && !at_end {
-					erase_from_buffer(&buffer)
-					changed = true
-					cursor_move = -1
-				}
-				else if get_key_held(.BACKSPACE) {
-					if is_ctrl_down() {
-						idx := quick_seek_buffer(&buffer, cursor.index, true)
-						remove_range(&buffer, idx, cursor.index)
-						cursor.index = idx
-					} else {
-						backspace_buffer(&buffer)
-					}
-					changed = true
-					cursor_move = -1
-				}
-			}
-			if is_ctrl_down() {
-				if IsKeyPressed(.A) {
-					cursor.index = 0
-					cursor.length = len(buffer)
-				}
-				if IsKeyPressed(.V) {
-					str := strings.clone_from_cstring(GetClipboardText())
-					if len(str) > 0 {
-						insert_string_to_buffer(&buffer, str)
-						changed = true
-						cursor_move = 1
-					}
-				}
-				if IsKeyPressed(.C) {
-					SetClipboardText(strings.clone_to_cstring(cast(string)buffer[cursor.index:cursor.index + cursor.length]))
-				}
-				if IsKeyPressed(.X) {
-					SetClipboardText(strings.clone_to_cstring(cast(string)buffer[cursor.index:cursor.index + cursor.length]))
-					erase_from_buffer(&buffer)
-					changed = true
-					cursor_move = -1
-				}
-			}
-			if changed {
-				res += {.change}
-				content^ = strings.clone_from_bytes(buffer[:])
-			}
-		}
-		
-		text_offset = max(text_offset, 0)
-		limit := rect.width - style.text_padding
-		if text_offset + max_offset >= limit {
-			text_offset = min(text_offset, max_offset - limit)
-		}
-		if max_offset < limit {
-			text_offset = 0
-		}
+		mutable_text(rect, &res, content)
 	}
 	return end_control()
 }
@@ -470,14 +464,6 @@ fancy_text_box :: proc(content: ^string, title: string, opts: Option_Set, loc :=
 	if begin_control(opts + {.hold_focus}, loc) {
 		update_control()
 		using control_state
-		if .just_focused in res {
-			cursor.index = -1
-			cursor.length = 0
-			text_offset = 0
-			clear(&buffer)
-			append_elem_string(&buffer, content^)
-		}
-
 		font := &style.font
 		font_height := f32(font.baseSize)
 		focus_time := control.focus_time[idx]
@@ -486,236 +472,18 @@ fancy_text_box :: proc(content: ^string, title: string, opts: Option_Set, loc :=
 		draw_rounded_rect_pro(rect, {style.corner_radius, style.corner_radius, 0, 0}, CORNER_VERTS, fill)
 		DrawRectangleRec({rect.x, rect.y + rect.height - 2, rect.width, 2}, style.colors[.accent])
 		size := rect.width * focus_time
-		DrawRectangleRec({rect.x + rect.width / 2 - size / 2, rect.y + rect.height - 2, size, 2}, blend_colors(style.colors[.accent], style.colors[.highlight], focus_time))
+		if .focus in res {
+			DrawRectangleRec({rect.x + rect.width / 2 - size / 2, rect.y + rect.height - 2, size, 2}, blend_colors(style.colors[.accent], style.colors[.highlight], focus_time))
+		} else {
+			DrawRectangleRec({rect.x, rect.y + rect.height - 2, rect.width, 2}, blend_colors(style.colors[.accent], style.colors[.highlight], focus_time))
+		}
 		if len(content) == 0 {
 			draw_aligned_string(font^, title, {rect.x + style.text_padding, rect.y + label_offset + (rect.height / 2 - font_height / 2 - label_offset) * (1 - focus_time)}, cast(f32)style.font.baseSize * (1 - focus_time * 0.2), {0, 0, 0, 200}, .near, .near)
 		} else {
 			draw_aligned_string(font^, title, {rect.x + style.text_padding, rect.y + label_offset}, cast(f32)style.font.baseSize * 0.8, {0, 0, 0, 200}, .near, .near)
 		}
-
-		// if data was altered this step
-		changed := false
-		// Draw text to find lines
-		y := rect.y + rect.height - style.text_padding - font_height
-		x := rect.x + style.text_padding
-		max_offset := f32(0)
-		cursor_min_x, cursor_max_x := f32(0), f32(0)
-		if .focus in res {
-			x -= text_offset
-		}
-		min_diff := rect.width
-		mouse_index := len(content)
-		for i := 0; i <= len(content); {
-			bytecount := 1
-			codepoint : rune = 0
-			if i < len(content) {
-				codepoint, bytecount = utf8.decode_rune_in_string(content[i:])
-			}
-	        index := GetGlyphIndex(font^, codepoint)
-
-	        rune_width := f32(font.chars[index].advanceX) if (font.chars[index].advanceX != 0) else font.recs[index].width + f32(font.chars[index].offsetX)
-	        if i == cursor.index {
-	        	cursor_min_x, cursor_max_x = max_offset, max_offset
-	        } else if i == cursor.index + cursor.length {
-	        	cursor_max_x = max_offset
-	        }
-	        if x + rune_width < rect.x {
-	        	i += bytecount
-	        	x += rune_width
-	        	max_offset += rune_width
-	        	continue
-	        }
-
-	        diff := abs(f32(GetMouseX()) - x)
-	        if diff < min_diff {
-	        	min_diff = diff
-	        	mouse_index = i
-	        }
-
-	        max_offset += rune_width
-
-	        // Draw cursor
-	        highlight := false
-	        if .focus in res {
-	        	if cursor.length == 0 && x > rect.x && x < rect.x + rect.width {
-		    		if i == cursor.index {
-		    			h := font_height * (0.5 + abs(math.sin_f32(f32(GetTime() * 7))) * 0.5)
-		    			DrawRectangleRec({x - 1, y + font_height / 2 - h / 2, 2, h}, style.colors[.text])
-		    		}
-		    	} else if i >= cursor.index && i < cursor.index + cursor.length {
-		        	DrawRectangleRec({max(x, rect.x), y, min(rect.width - (x - rect.x), rune_width + 1), font_height}, style.colors[.text])
-		        	highlight = true
-		        }
-	        } else {
-	        	if x > rect.x + rect.width {
-					break
-				}
-	        }
-
-	        if i == len(content) {
-	        	break
-	        }
-
-	        if x < rect.x + rect.width {
-				draw_rune_pro(font^, codepoint, {x, y}, {rect.x, rect.y, (rect.x + rect.width) - x, rect.height}, font_height, style.colors[.fill] if highlight else style.colors[.text])
-	        }
-			x += rune_width
-			i += bytecount
-		}
-
-		if .hover in res {
-			hover_text = true
-		}
-
-		if .focus in res {
-			if .hover in res {
-				if double_click {
-					cursor.index = 0
-					cursor.length = len(content)
-				} else {
-					if IsMouseButtonPressed(.LEFT) && mouse_index != -1 {
-						cursor.drag_from = mouse_index
-					}
-				}
-			}
-
-			if IsMouseButtonDown(.LEFT) {
-				if mouse_index < cursor.drag_from {
-					cursor.index = mouse_index
-					cursor.length = cursor.drag_from - cursor.index
-				} else {
-					cursor.index = cursor.drag_from
-					cursor.length = mouse_index - cursor.index
-				}
-				mouse_x := f32(GetMouseX())
-				if mouse_x < rect.x {
-					text_offset += (mouse_x - rect.x) * 0.01
-				} else if mouse_x > rect.x + rect.width {
-					text_offset += (mouse_x - (rect.x + rect.width)) * 0.01
-				}
-			}
-			if cursor_move > 0 {
-				limit := rect.width - style.text_padding * 2
-				if cursor_max_x > text_offset + limit {
-					text_offset = cursor_max_x - limit
-				}
-			} else if cursor_move < 0 {
-				if cursor_min_x < text_offset + style.text_padding {
-					text_offset = cursor_min_x - style.text_padding
-				}
-			}
-			cursor_move = 0
-			if get_key_held(.LEFT) {
-				cursor_move = -1
-				delta := 0
-				if is_ctrl_down() {
-					delta = quick_seek_buffer(&buffer, cursor.index, true) - cursor.index
-				}
-				else{
-					_, delta = utf8.decode_last_rune_in_bytes(buffer[:cursor.index])
-					delta = -delta
-				}
-				if is_shift_down() {
-					cursor.index += delta
-					if cursor.index >= 0 {
-						cursor.length -= delta
-					}
-				} else {
-					if cursor.length == 0 {
-						cursor.index += delta
-					}
-					cursor.length = 0
-				}
-				if cursor.index < 0 do cursor.index = 0
-			}
-			if get_key_held(.RIGHT) {
-				cursor_move = 1
-				delta := 0
-				if is_ctrl_down() {
-					delta = quick_seek_buffer(&buffer, cursor.index + cursor.length, false) - cursor.index + 1
-				}
-				else{
-					_, delta = utf8.decode_rune_in_bytes(buffer[cursor.index + cursor.length:])
-				}
-				if is_shift_down() {
-					cursor.length += delta
-				} else {
-					if cursor.length > 0 {
-						cursor.index += cursor.length
-					} else {
-						cursor.index += delta
-					}
-					cursor.length = 0
-				}
-				if cursor.length == 0 {
-					if cursor.index > len(buffer) {
-						cursor.index = len(buffer)
-					}
-				} else {
-					if cursor.index + cursor.length > len(buffer) {
-						cursor.length = len(buffer) - cursor.index
-					}
-				}
-			}
-			if rune_count > 0 {
-				insert_runes_to_buffer(&buffer, runes[0:rune_count])
-				changed = true
-				cursor_move = 1
-			}
-			if len(buffer) != 0 {
-				at_end := (len(buffer) == cursor.index)
-
-				if get_key_held(.DELETE) && !at_end {
-					erase_from_buffer(&buffer)
-					changed = true
-					cursor_move = -1
-				}
-				else if get_key_held(.BACKSPACE) {
-					if is_ctrl_down() {
-						idx := quick_seek_buffer(&buffer, cursor.index, true)
-						remove_range(&buffer, idx, cursor.index)
-						cursor.index = idx
-					} else {
-						backspace_buffer(&buffer)
-					}
-					changed = true
-					cursor_move = -1
-				}
-			}
-			if is_ctrl_down() {
-				if IsKeyPressed(.A) {
-					cursor.index = 0
-					cursor.length = len(buffer)
-				}
-				if IsKeyPressed(.V) {
-					str := strings.clone_from_cstring(GetClipboardText())
-					if len(str) > 0 {
-						insert_string_to_buffer(&buffer, str)
-						changed = true
-						cursor_move = 1
-					}
-				}
-				if IsKeyPressed(.C) {
-					SetClipboardText(strings.clone_to_cstring(cast(string)buffer[cursor.index:cursor.index + cursor.length]))
-				}
-				if IsKeyPressed(.X) {
-					SetClipboardText(strings.clone_to_cstring(cast(string)buffer[cursor.index:cursor.index + cursor.length]))
-					erase_from_buffer(&buffer)
-					changed = true
-					cursor_move = -1
-				}
-			}
-			if changed {
-				res += {.change}
-				content^ = strings.clone_from_bytes(buffer[:])
-			}
-		}
-		
-		text_offset = max(text_offset, 0)
-		limit := rect.width - style.text_padding
-		if text_offset + max_offset >= limit {
-			text_offset = min(text_offset, max_offset - limit)
-		}
+		text_height := font_height + style.text_padding * 2
+		mutable_text({rect.x, rect.y + rect.height - text_height, rect.width, text_height}, &res, content)
 	}
 	return end_control()
 }
@@ -786,16 +554,21 @@ checkbox :: proc(value: ^bool, title: string, opts: Option_Set, loc := #caller_l
 	if begin_control(opts, loc) {
 		using control_state
 		rect.width = CHECKBOX_SIZE
+		text_width := measure_string(style.font, title, cast(f32)style.font.baseSize).x
 		if title != {} {
-			text_width := measure_string(style.font, title, cast(f32)style.font.baseSize).x + style.text_padding * 2
+			text_width += style.text_padding * 2
 			rect.width += text_width
-			draw_rounded_rect({rect.x, rect.y, CHECKBOX_SIZE + text_width * control.focus_time[idx], rect.height}, style.corner_radius, CORNER_VERTS, Fade(BLACK, control.focus_time[idx] * 0.1))
 		}
 		update_control()
 		state_time := &control.state_time[idx]
 		draw_rounded_rect(rect, style.corner_radius, CORNER_VERTS, Fade(BLACK, control.hover_time[idx] * 0.1))
+		if .focus in res {
+			draw_rounded_rect({rect.x, rect.y, CHECKBOX_SIZE + text_width * control.focus_time[idx], rect.height}, style.corner_radius, CORNER_VERTS, Fade(BLACK, control.focus_time[idx] * 0.1))
+		} else {
+			draw_rounded_rect(rect, style.corner_radius, CORNER_VERTS, Fade(BLACK, control.focus_time[idx] * 0.1))
+		}
 		if value^ {
-			draw_rounded_rect({rect.x, rect.y, CHECKBOX_SIZE, CHECKBOX_SIZE}, style.corner_radius, CORNER_VERTS, style.colors[.highlight])
+			draw_rounded_rect({rect.x, rect.y, CHECKBOX_SIZE, CHECKBOX_SIZE}, style.corner_radius, CORNER_VERTS, blend_colors(style.colors[.highlight], WHITE, (control.hover_time[idx] + control.focus_time[idx]) * 0.1))
 			time := state_time^
 			if time > 0.4 && time < 0.5 {
 				time = 0.4
@@ -840,18 +613,32 @@ slider :: proc(value: ^f32, min, max: f32, opts: Option_Set, loc := #caller_loca
 		using control_state
 		update_control()
 		baseline := rect.y + 10
-		draw_rounded_rect({rect.x, baseline - 5, rect.width, 10}, 5, CORNER_VERTS, style.colors[.fill])
-		inner_size := rect.width - 10
+		draw_rect({rect.x, baseline - 5, rect.width, 10}, style.colors[.fill])
+		//DrawRectangleRec({rect.x, baseline - 5, rect.width, 10}, style.colors[.fill])
 		range := max - min
-		value_point := rect.x + inner_size * ((value^ - min) / range)
-		fill := blend_colors(style.colors[.accent], BLACK, control.hover_time[idx] * 0.1)
-		draw_rounded_rect_pro({rect.x, baseline - 5, value_point - rect.x, 10}, {5, 0, 0, 5}, CORNER_VERTS, fill)
-		draw_rounded_rect({value_point, baseline - 10, 10, 20}, 3, CORNER_VERTS, fill)
+		value_point := rect.x + rect.width * ((value^ - min) / range)
+		hover_time := control.hover_time[idx]
+		fill := blend_colors(style.colors[.accent], BLACK, hover_time * 0.1)
+		//DrawRectangleRec({rect.x, baseline - 5, value_point - rect.x, 10}, fill)
+		draw_rect({rect.x, baseline - 5, value_point - rect.x, 10}, fill)
+		//draw_rounded_rect({value_point, baseline - 10, 10, 20}, 3, CORNER_VERTS, fill)
+		time := control.hover_time[idx]
+		hover_value := clamp(min + ((f32(GetMouseX()) - rect.x) / rect.width) * range, min, max)
+		if time > 0.01 {
+			point := rect.x + rect.width * ((hover_value - min) / range)
+			text := fmt.aprintf("%.2f", hover_value)
+			text_size := measure_string(style.font, text, 18)
+			text_size.x += style.text_padding * 2
+			draw_rect({point - text_size.x / 2, rect.y - 25, text_size.x, 20}, Fade(fill, time))
+			//draw_rounded_rect_pro({point - text_size.x / 2, rect.y - 25, text_size.x, 20}, {7, 7, 7, 7}, CORNER_VERTS, Fade(fill, time))
+			DrawTriangle({point - 5, rect.y - 5}, {point, rect.y}, {point + 5, rect.y - 5}, Fade(fill, time))
+			draw_aligned_string(style.font, text, {point, rect.y - 15}, 18, Fade(BLACK, time), .center, .center)
+		}
 		if .focus in res {
 			//hide_cursor = true
 			//lock_mouse_to_slider(rect.x + 5, rect.x + 6 + inner_size, baseline)
 			prev_value := value^
-			value^ = clamp(min + ((f32(GetMouseX()) - (rect.x + 5)) / inner_size) * range, min, max)
+			value^ = hover_value
 			if value^ != prev_value {
 				res += {.change}
 			}

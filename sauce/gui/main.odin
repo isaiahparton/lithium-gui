@@ -9,7 +9,7 @@ import "core:math/rand"
 main :: proc(){
 	using raylib
 
-	val := false
+	vals := [3]bool{false, false, false}
 	lo, hi := f32(0), f32(100)
 	text1, text2 := "", ""
 
@@ -35,19 +35,19 @@ main :: proc(){
 			text("regular text input", .near, .near, {})
 			text_box(&text2, {})
 			push_layout()
-			checkbox(&val, "On" if val else "Off", {})
+			checkbox(&vals[0], "first", {})
 			layout_set_side(.right)
-			checkbox(&val, "Uh", {})
-			checkbox(&val, "Another one", {})
+			checkbox(&vals[1], "second", {})
+			checkbox(&vals[2], "third", {})
 			pop_layout()
 			button("CLICK ME", {})
 			button("SUBTLE", {.subtle})
 			end_widget()
 		}
 		if begin_widget({ctx.width / 2 + 25, 50, ctx.width / 2 - 75, ctx.height - 100}, "Other Stuff", {}) {
-			text(fmt.aprintf("Corner radius: %f", ctx.style.corner_radius), .near, .near, {})
+			text("Corner radius", .near, .near, {})
 			slider(&ctx.style.corner_radius, 0, 10, {})
-			//300 * (value^ / (min - max))knob(&ctx.style.corner_radius, 0, 10, "hi",  {})
+			//knob(&ctx.style.corner_radius, 0, 10, "hi",  {})
 			end_widget()
 		}
 

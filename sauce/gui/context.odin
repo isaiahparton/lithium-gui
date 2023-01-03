@@ -104,8 +104,10 @@ Context :: struct {
 	panel_tex: raylib.RenderTexture,
 	tex_offset: [2]f32,
 	max_panel_height: f32,
-	shadow_tex: raylib.Texture,
-	shadow_npatch: raylib.NPatchInfo,
+	widget_tex: raylib.Texture,
+	widget_npatch: raylib.NPatchInfo,
+	rect_tex: raylib.Texture,
+	rect_npatch: raylib.NPatchInfo,
 }
 ctx : Context = {}
 
@@ -120,12 +122,25 @@ init_context :: proc(){
 		panel_tex = raylib.LoadRenderTexture(4096, 4096)
 		icon_atlas = raylib.LoadTexture("./icons/atlas.png")
 		icon_cols = cast(int)icon_atlas.width / style.icon_size
-		shadow_tex = raylib.LoadTexture("./shadow.png")
-		shadow_npatch = { { 0, 0, cast(f32)shadow_tex.width, cast(f32)shadow_tex.height }, 40, 40, 40, 40, .NINE_PATCH }
+		widget_tex = raylib.LoadTexture("./widget.png")
+		widget_npatch = { { 0, 0, cast(f32)widget_tex.width, cast(f32)widget_tex.height }, 40, 40, 40, 40, .NINE_PATCH }
+		rect_tex = raylib.LoadTexture("./rect.png")
+		rect_npatch = { { 0, 0, cast(f32)rect_tex.width, cast(f32)rect_tex.height }, 5, 5, 5, 5, .NINE_PATCH }
 	}
 }
 init_default_style :: proc(){
 	using ctx.style
+	/*
+	colors[.fill] = {30, 30, 30, 255}
+	colors[.backing] = {5, 5, 5, 255}
+	colors[.outline] = {0, 0, 0, 255}
+	colors[.highlight] = {35, 35, 35, 255}
+	colors[.foreground] = {20, 20, 20, 255}
+	colors[.background] = {10, 10, 10, 255}
+	colors[.text] = {255, 255, 255, 255}
+	colors[.accent] = {17, 173, 163, 255}
+	*/
+	
 	colors[.fill] = {230, 230, 230, 255}
 	colors[.backing] = {180, 180, 180, 255}
 	colors[.outline] = {0, 0, 0, 255}
@@ -134,6 +149,7 @@ init_default_style :: proc(){
 	colors[.background] = {192, 233, 227, 255}
 	colors[.text] = {0, 0, 0, 255}
 	colors[.accent] = {17, 173, 163, 255}
+	
 	text_padding = 6
 	outline_thick = 1.1
 	padding = 20
@@ -227,7 +243,7 @@ end :: proc(){
 		}
 		id := control.id[i]
 		delta := 7 * GetFrameTime()
-		if id == hover_id {
+		if id == hover_id || id == focus_id {
 			control.hover_time[i] += delta
 		} else {
 			control.hover_time[i] -= delta
@@ -289,7 +305,7 @@ end :: proc(){
 		}
 		time = clamp(time, 0, 1)
 		dst := Rectangle{-half_width, -half_height, rect.width, rect.height}
-		DrawTextureNPatch(shadow_tex, shadow_npatch, {dst.x - 40, dst.y - 40, dst.width + 80, dst.height + 80}, {0, 0}, 0, WHITE)
+		DrawTextureNPatch(widget_tex, widget_npatch, {dst.x - 40, dst.y - 40, dst.width + 80, dst.height + 80}, {0, 0}, 0, WHITE)
 		radius := style.corner_radius * 2
 		draw_render_surface(panel_tex, {tex_offset.x, tex_offset.y, rect.width, rect.height}, dst, Fade(WHITE, self.time))
 		rlPopMatrix()

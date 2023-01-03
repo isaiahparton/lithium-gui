@@ -29,7 +29,7 @@ begin_widget :: proc(rect: Rectangle, title: string, opts: Option_Set, loc := #c
 		for i := 0; i < MAX_WIDGETS; i += 1 {
 			if !widget_reserved[i] {
 				idx = i
-				widget[i] = {rect=rect, id=id}
+				widget[i] = {id=id}
 				append(&widget_stack, i)
 				break
 			}
@@ -45,6 +45,7 @@ begin_widget :: proc(rect: Rectangle, title: string, opts: Option_Set, loc := #c
 	self.exists = true
 	self.title = title
 	self.opts = opts
+	self.rect = rect
 	self.inner_rect = {
 		self.rect.x + style.padding,
 		self.rect.y + style.padding,
@@ -77,7 +78,8 @@ begin_widget :: proc(rect: Rectangle, title: string, opts: Option_Set, loc := #c
 	}
 	max_panel_height = max(max_panel_height, self.rect.height)
 	radius := style.corner_radius * 2
-	draw_rounded_rect(self.rect, radius, CORNER_VERTS, style.colors[.foreground])
+	//draw_rounded_rect(self.rect, radius, CORNER_VERTS, style.colors[.foreground])
+	raylib.DrawRectangleRec(self.rect, style.colors[.foreground])
 	push_layout()
 	return true
 }

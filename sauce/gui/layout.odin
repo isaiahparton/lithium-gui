@@ -69,15 +69,15 @@ push_layout :: proc(){
 		layout[layout_idx].last_rect = layout[layout_idx - 1].last_rect
 	}
 }
-pop_layout :: proc(){
+pop_layout :: proc() -> Rectangle {
 	assert(ctx.layout_idx >= 0, "pop_layout(): Layout stack is already empty")
 	self := &ctx.layout[ctx.layout_idx]
-	//raylib.DrawRectangleRec(self.full_rect, {0, 0, 255, 100})
 	using widget := &ctx.widget[ctx.widget_idx]
 	ctx.layout_idx -= 1
 	if ctx.layout_idx >= 0 {
-		ctx.layout[ctx.layout_idx].last_rect = ctx.layout[ctx.layout_idx + 1].full_rect
+		ctx.layout[ctx.layout_idx].last_rect = self.full_rect
 	}
+	return self.full_rect
 }
 
 layout_set_spacing :: proc(spacing: f32){
