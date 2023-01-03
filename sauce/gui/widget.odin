@@ -12,7 +12,7 @@ Widget :: struct {
 	title: string,
 	contents: map[Id]int,
 	rect, inner_rect: Rectangle,
-	offset, offset_target, space, tex_offset: [2]f32,
+	space, tex_offset: [2]f32,
 	z: int,
 	id: Id,
 	opts: Option_Set,
@@ -68,7 +68,6 @@ begin_widget :: proc(rect: Rectangle, title: string, opts: Option_Set, loc := #c
 	}
 	raylib.rlPushMatrix()
 	raylib.rlTranslatef(tex_offset.x - self.rect.x, tex_offset.y - self.rect.y, 0)
-	raylib.BeginScissorMode(i32(tex_offset.x), i32(tex_offset.y), i32(self.rect.width), i32(self.rect.height))
 	self.tex_offset = tex_offset
 	if tex_offset.x + self.rect.width > f32(panel_tex.texture.width) {
 		tex_offset.x = 0
@@ -85,34 +84,11 @@ begin_widget :: proc(rect: Rectangle, title: string, opts: Option_Set, loc := #c
 end_widget :: proc(){
 	using ctx
 	pop_layout()
-	raylib.EndScissorMode()
 	raylib.rlPopMatrix()
 	raylib.EndTextureMode()
 
 	self := &widget[widget_idx]
-	//--- update scrolling/panning ---//
-	self.offset += (self.offset_target - self.offset) * 20 * raylib.GetFrameTime()
-	if widget_hover {
-		delta := raylib.GetMouseWheelMove() * 77
-		if raylib.IsKeyDown(.LEFT_SHIFT) {
-			self.offset_target.x -= delta
-		} else {
-			self.offset_target.y -= delta
-		}
-		if raylib.IsMouseButtonPressed(.MIDDLE) {
-			drag_from = mouse_point + self.offset
-		}
-		if raylib.IsMouseButtonDown(.MIDDLE) {
-			self.offset = drag_from - mouse_point
-			self.offset_target = self.offset
-		}
-	}
-	self.space += style.padding
-	max_x, max_y := max(0, self.space.x - self.rect.width), max(0, self.space.y - self.rect.height)
-	self.offset.x = clamp(self.offset.x, 0, max_x)
-	self.offset_target.x = clamp(self.offset_target.x, 0, max_x)
-	self.offset.y = clamp(self.offset.y, 0, max_y)
-	self.offset_target.y = clamp(self.offset_target.y, 0, max_y)
+	
 	//--- delete entries for controls that don't exist ---//
 	for id, idx in self.contents {
 		if !control.exists[idx] {

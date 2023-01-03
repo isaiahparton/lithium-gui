@@ -65,27 +65,19 @@ push_layout :: proc(){
 		spacing = style.spacing,
 		full_rect = {width, height, 0, 0},
 	}
-}
-push_attached_layout :: proc(side: Rect_Side){
-	using ctx
-	push_layout()
-	layout[layout_idx] = layout[layout_idx - 1]
-	layout[layout_idx].side = side
+	if layout_idx > 0 {
+		layout[layout_idx].last_rect = layout[layout_idx - 1].last_rect
+	}
 }
 pop_layout :: proc(){
 	assert(ctx.layout_idx >= 0, "pop_layout(): Layout stack is already empty")
 	self := &ctx.layout[ctx.layout_idx]
-	//raylib.DrawRectangleRec(self.full_rect, {0, 0, 255, 25})
+	//raylib.DrawRectangleRec(self.full_rect, {0, 0, 255, 100})
 	using widget := &ctx.widget[ctx.widget_idx]
-	space.x = max(space.x, (self.full_rect.width + self.full_rect.x) - rect.x + offset.x)
-	space.y = max(space.y, (self.full_rect.height + self.full_rect.y) - rect.y + offset.y)
 	ctx.layout_idx -= 1
-}
-pop_attached_layout :: proc(){
-	using ctx
-	pop_layout()
-	assert(layout_idx >= 0, "pop_attached_layout(): No layout to attach to")
-	layout[layout_idx].last_rect = layout[layout_idx + 1].full_rect	
+	if ctx.layout_idx >= 0 {
+		ctx.layout[ctx.layout_idx].last_rect = ctx.layout[ctx.layout_idx + 1].full_rect
+	}
 }
 
 layout_set_spacing :: proc(spacing: f32){
@@ -99,19 +91,6 @@ layout_set_size :: proc(width, height: f32){
 }
 layout_set_side :: proc(side: Rect_Side){
 	ctx.layout[ctx.layout_idx].side = side
-}
-layout_place_at :: proc(relative: Rectangle, absolute: Rectangle, opts: Option_Set){
-	using ctx
-	inner_rect := &ctx.widget[ctx.widget_idx].inner_rect
-	rect := Rectangle{
-		inner_rect.x + inner_rect.width * relative.x + absolute.x,
-		inner_rect.y + inner_rect.height * relative.y + absolute.y,
-		inner_rect.width * relative.width + absolute.width,
-		inner_rect.height * relative.height + absolute.height,
-	}
-	set_rect = true
-	ctx.layout[ctx.layout_idx].size = {rect.width, rect.height}
-	ctx.layout[ctx.layout_idx].first_rect = rect
 }
 layout_set_last :: proc(rect: Rectangle){
 	using self := &ctx.layout[ctx.layout_idx]

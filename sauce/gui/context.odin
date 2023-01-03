@@ -58,6 +58,7 @@ Context :: struct {
 		id: Id, 
 		rect: Rectangle, 
 		res: Result_Set,
+		opts: Option_Set,
 	},
 	// containers are containers
 	cnt_pool: map[Id]int,
@@ -225,37 +226,30 @@ end :: proc(){
 			continue
 		}
 		id := control.id[i]
+		delta := 7 * GetFrameTime()
 		if id == hover_id {
-			control.hover_time[i] += 7 * GetFrameTime()
+			control.hover_time[i] += delta
 		} else {
-			control.hover_time[i] -= 7 * GetFrameTime()
+			control.hover_time[i] -= delta
 		}
 		control.hover_time[i] = clamp(control.hover_time[i], 0, 1)
 		if id == focus_id {
-			control.focus_time[i] += 7 * GetFrameTime()
+			control.focus_time[i] += delta
 		} else {
-			control.focus_time[i] -= 7 * GetFrameTime()
+			control.focus_time[i] -= delta
 		}
 		control.focus_time[i] = clamp(control.focus_time[i], 0, 1)
 		control.exists = false
 	}
 
-	if widget_resize {
-		SetMouseCursor(.RESIZE_NWSE)
-	} else {
-		if IsMouseButtonDown(.MIDDLE) {
-			SetMouseCursor(.RESIZE_ALL)
+	if hover_id != 0 || dragging {
+		if hover_text {
+			SetMouseCursor(.IBEAM)
 		} else {
-			if hover_id != 0 || dragging {
-				if hover_text {
-					SetMouseCursor(.IBEAM)
-				} else {
-					SetMouseCursor(.POINTING_HAND)
-				}
-			} else {
-				SetMouseCursor(.DEFAULT)
-			}
+			SetMouseCursor(.POINTING_HAND)
 		}
+	} else {
+		SetMouseCursor(.DEFAULT)
 	}
 
 	active_widget = -1
@@ -298,16 +292,6 @@ end :: proc(){
 		DrawTextureNPatch(shadow_tex, shadow_npatch, {dst.x - 40, dst.y - 40, dst.width + 80, dst.height + 80}, {0, 0}, 0, WHITE)
 		radius := style.corner_radius * 2
 		draw_render_surface(panel_tex, {tex_offset.x, tex_offset.y, rect.width, rect.height}, dst, Fade(WHITE, self.time))
-		if i == widget_drag && widget_resize {
-			if IsMouseButtonDown(.LEFT) {
-				rect.width = mouse_point.x - rect.x
-				rect.height = mouse_point.y - rect.y
-				rect.width = max(rect.width, 96)
-				rect.height = max(rect.height, 48)
-			} else if IsMouseButtonReleased(.LEFT) {
-				widget_resize = false
-			}
-		}
 		rlPopMatrix()
 
 		if !self.exists {

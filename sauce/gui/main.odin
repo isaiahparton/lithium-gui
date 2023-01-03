@@ -29,17 +29,22 @@ main :: proc(){
 
 		begin()
 
-		if begin_widget({ctx.width / 2 + 50, ctx.height / 2 - 300, 300, 400}, "Main Stuff", {}) {
+		if begin_widget({50, 50, ctx.width / 2 - 75, ctx.height - 100}, "Main Stuff", {}) {
 			text("fancy text input", .near, .near, {})
 			fancy_text_box(&text1, "Type something here", {})
 			text("regular text input", .near, .near, {})
 			text_box(&text2, {})
+			push_layout()
 			checkbox(&val, "On" if val else "Off", {})
+			layout_set_side(.right)
+			checkbox(&val, "Uh", {})
+			checkbox(&val, "Another one", {})
+			pop_layout()
 			button("CLICK ME", {})
 			button("SUBTLE", {.subtle})
 			end_widget()
 		}
-		if begin_widget({ctx.width / 2 - 450, ctx.height / 2 - 300, 300, 400}, "Other Stuff", {}) {
+		if begin_widget({ctx.width / 2 + 25, 50, ctx.width / 2 - 75, ctx.height - 100}, "Other Stuff", {}) {
 			text(fmt.aprintf("Corner radius: %f", ctx.style.corner_radius), .near, .near, {})
 			slider(&ctx.style.corner_radius, 0, 10, {})
 			//300 * (value^ / (min - max))knob(&ctx.style.corner_radius, 0, 10, "hi",  {})

@@ -20,6 +20,7 @@ Option :: enum {
 	align_center,
 	align_far,
 	allow_scroll,
+	no_connect,
 }
 Option_Set :: bit_set[Option;u16]
 
@@ -105,7 +106,7 @@ reserve_control :: proc(id: Id) -> int {
 	control_count += 1
 	return idx
 }
-update_control :: proc(opts: Option_Set) {
+update_control :: proc() {
 	using ctx
 	using control_state
 	if focus_id == id {
@@ -137,8 +138,9 @@ update_control :: proc(opts: Option_Set) {
 	}
 }
 
-begin_control :: proc(opts: Option_Set, loc: runtime.Source_Code_Location) -> bool {
+begin_control :: proc(_opts: Option_Set, loc: runtime.Source_Code_Location) -> bool {
 	using ctx.control_state
+	opts = _opts
 	rect = get_control_rect(opts)
 	if !check_control_clip(rect) {
 		return false
@@ -148,8 +150,9 @@ begin_control :: proc(opts: Option_Set, loc: runtime.Source_Code_Location) -> bo
 	idx = reserve_control(id)
 	return !(idx < 0)
 }
-begin_free_control :: proc(my_rect: Rectangle, opts: Option_Set, loc: runtime.Source_Code_Location) -> bool {
+begin_free_control :: proc(my_rect: Rectangle, _opts: Option_Set, loc: runtime.Source_Code_Location) -> bool {
 	using ctx.control_state
+	opts = _opts
 	rect = my_rect
 	if !check_control_clip(rect) {
 		return false
@@ -159,8 +162,9 @@ begin_free_control :: proc(my_rect: Rectangle, opts: Option_Set, loc: runtime.So
 	idx = reserve_control(id)
 	return !(idx < 0)
 }
-begin_static_control :: proc(opts: Option_Set) -> bool {
+begin_static_control :: proc(_opts: Option_Set) -> bool {
 	using ctx.control_state
+	opts = _opts
 	rect = get_control_rect(opts)
 	if !check_control_clip(rect) {
 		return false
@@ -170,8 +174,10 @@ begin_static_control :: proc(opts: Option_Set) -> bool {
 end_control :: proc() -> Result_Set {
 	using ctx.control_state
 	layout := &ctx.layout[ctx.layout_idx]
-	layout.size = {rect.width, rect.height}
-	layout.last_rect = rect
+	if .no_connect not_in opts {
+		layout.size = {rect.width, rect.height}
+		layout.last_rect = rect
+	}
 	layout.full_rect.x = min(layout.full_rect.x, rect.x)
 	layout.full_rect.y = min(layout.full_rect.y, rect.y)
 	layout.full_rect.width = max(layout.full_rect.width, rect.width + (rect.x - layout.full_rect.x))
@@ -186,8 +192,14 @@ end_free_control :: proc() -> Result_Set {
 get_control_rect :: proc(opts: Option_Set) -> Rectangle {
 	layout := &ctx.layout[ctx.layout_idx]
 	if layout.last_rect == {} {
-		rect := ctx.widget[ctx.widget_idx].inner_rect
-		return {rect.x - ctx.widget[ctx.widget_idx].offset.x, rect.y - ctx.widget[ctx.widget_idx].offset.y, rect.width, layout.size.y}
+		inner_rect := ctx.widget[ctx.widget_idx].inner_rect
+		rect := Rectangle{inner_rect.x, inner_rect.y, inner_rect.width, layout.size.y}
+		if ctx.cnt_idx >= 0 {
+			offset := ctx.cnt_data[ctx.cnt_idx].offset
+			rect.x += offset.x
+			rect.y += offset.y
+		}
+		return rect
 	}
 	return get_next_rect(layout.last_rect, layout.size, layout.side, opts)
 }
@@ -205,8 +217,8 @@ text_box :: proc(content: ^string, opts: Option_Set, loc := #caller_location) ->
 	using ctx
 	using raylib
 	ctx.layout[ctx.layout_idx].size.y = f32(style.font.baseSize) + style.text_padding * 2
-	if begin_control(opts, loc) {
-		update_control(opts + {.hold_focus})
+	if begin_control(opts + {.hold_focus}, loc) {
+		update_control()
 		using control_state
 		if .just_focused in res {
 			cursor.index = -1
@@ -455,8 +467,8 @@ fancy_text_box :: proc(content: ^string, title: string, opts: Option_Set, loc :=
 	using ctx
 	using raylib
 	ctx.layout[ctx.layout_idx].size.y = FANCY_TEXT_BOX_HEIGHT
-	if begin_control(opts, loc) {
-		update_control(opts + {.hold_focus})
+	if begin_control(opts + {.hold_focus}, loc) {
+		update_control()
 		using control_state
 		if .just_focused in res {
 			cursor.index = -1
@@ -716,7 +728,7 @@ button :: proc(title: string, opts: Option_Set, loc := #caller_location) -> Resu
 	layout[layout_idx].size.y = BUTTON_HEIGHT
 	if begin_control(opts, loc) {
 		using control_state
-		update_control(opts)
+		update_control()
 		if .subtle in opts {
 			draw_rounded_rect(rect, style.corner_radius, CORNER_VERTS, Fade(BLACK, control.hover_time[idx] * 0.1))
 			scale := control.focus_time[idx]
@@ -752,7 +764,7 @@ knob :: proc(value: ^f32, min, max: f32, title: string, opts: Option_Set, loc :=
 	layout[layout_idx].size = {KNOB_SIZE, KNOB_SIZE}
 	if begin_control(opts, loc) {
 		using control_state
-		update_control(opts)
+		update_control()
 		center := Vector2{rect.x + 20, rect.y + 20}
 		DrawCircleV(center, KNOB_RAD, blend_colors(style.colors[.highlight], WHITE, 0.2 + control.hover_time[idx] * 0.1))
 		angle := 300 * (value^ / (min - max))
@@ -770,17 +782,16 @@ HALF_CHECKBOX_SIZE :: CHECKBOX_SIZE / 2
 checkbox :: proc(value: ^bool, title: string, opts: Option_Set, loc := #caller_location) -> Result_Set {
 	using ctx
 	using raylib
-	layout[layout_idx].size.y = CHECKBOX_SIZE
+	layout[layout_idx].size = {CHECKBOX_SIZE, CHECKBOX_SIZE}
 	if begin_control(opts, loc) {
 		using control_state
-		prev_width := rect.width
 		rect.width = CHECKBOX_SIZE
 		if title != {} {
 			text_width := measure_string(style.font, title, cast(f32)style.font.baseSize).x + style.text_padding * 2
 			rect.width += text_width
 			draw_rounded_rect({rect.x, rect.y, CHECKBOX_SIZE + text_width * control.focus_time[idx], rect.height}, style.corner_radius, CORNER_VERTS, Fade(BLACK, control.focus_time[idx] * 0.1))
 		}
-		update_control(opts)
+		update_control()
 		state_time := &control.state_time[idx]
 		draw_rounded_rect(rect, style.corner_radius, CORNER_VERTS, Fade(BLACK, control.hover_time[idx] * 0.1))
 		if value^ {
@@ -803,7 +814,6 @@ checkbox :: proc(value: ^bool, title: string, opts: Option_Set, loc := #caller_l
 		if .submit in res {
 			value^ = !value^
 		}
-		rect.width = prev_width
 	}
 	return end_control()
 }
@@ -825,11 +835,10 @@ lock_mouse_to_slider :: proc(min, max, baseline: f32){
 slider :: proc(value: ^f32, min, max: f32, opts: Option_Set, loc := #caller_location) -> Result_Set {
 	using ctx
 	using raylib
-	opts := opts + {.draggable}
 	layout[layout_idx].size.y = 20
-	if begin_control(opts, loc){
+	if begin_control(opts + {.draggable}, loc){
 		using control_state
-		update_control(opts)
+		update_control()
 		baseline := rect.y + 10
 		draw_rounded_rect({rect.x, baseline - 5, rect.width, 10}, 5, CORNER_VERTS, style.colors[.fill])
 		inner_size := rect.width - 10
@@ -867,9 +876,9 @@ range_slider :: proc(low, high: ^f32, min, max: f32, opts: Option_Set, loc := #c
 	low_point := [2]f32{rect.x + 5 + inner_size * (low^ / (max - min)), baseline}
 	high_point := [2]f32{rect.x + 5 + inner_size * (high^ / (max - min)), baseline}
 	low_rect := Rectangle{low_point.x - 10, low_point.y - 10, 20, 20}
-	if begin_free_control(low_rect, opts, loc) {
+	if begin_free_control(low_rect, opts + {.draggable}, loc) {
 		using control_state
-		update_control(opts + {.draggable})
+		update_control()
 		//draw_control_circle(low_point)
 		DrawCircle(i32(low_point.x), i32(low_point.y), 10, style.colors[.accent])
 	}
@@ -878,9 +887,9 @@ range_slider :: proc(low, high: ^f32, min, max: f32, opts: Option_Set, loc := #c
 	loc.column += 1
 
 	high_rect := Rectangle{high_point.x - 10, high_point.y - 10, 20, 20}
-	if begin_free_control(high_rect, opts, loc) {
+	if begin_free_control(high_rect, opts + {.draggable}, loc) {
 		using control_state
-		update_control(opts + {.draggable})
+		update_control()
 		//draw_control_circle(high_point)
 		DrawCircle(i32(high_point.x), i32(high_point.y), 10, style.colors[.accent])
 	}
@@ -925,5 +934,5 @@ text :: proc(text: string, align_x, align_y: Alignment, opts: Option_Set){
 	} else if side == .left || side == .right {
 		control_state.rect.width = size.x
 	}
-	layout_set_last(ctx.control_state.rect)
+	end_control()
 }
