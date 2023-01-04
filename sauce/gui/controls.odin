@@ -5,6 +5,7 @@ import "core:strings"
 import "core:unicode/utf8"
 import "core:math"
 import "core:runtime"
+import "core:strconv"
 
 MAX_CONTROLS :: 128
 CORNER_VERTS :: 5
@@ -305,6 +306,7 @@ mutable_text :: proc(rect: Rectangle, res: ^Result_Set, content: ^string) {
 		}
 	}
 	if IsMouseButtonDown(.LEFT) {
+		cursor.drag_from = clamp(cursor.drag_from, 0, len(content))
 		if mouse_index < cursor.drag_from {
 			cursor.index = mouse_index
 			cursor.length = cursor.drag_from - cursor.index
@@ -488,6 +490,41 @@ fancy_text_box :: proc(content: ^string, title: string, opts: Option_Set, loc :=
 	return end_control()
 }
 
+f64_box :: proc(num: ^f64, opts: Option_Set, loc := #caller_location) -> Result_Set {
+	res := text_box(&ctx.number_text, opts, loc)
+	if .just_focused in res {
+		ctx.number_text = fmt.aprint(num^)
+		clear(&ctx.buffer)
+		append_elem_string(&ctx.buffer, ctx.number_text)
+	}
+	if .change in res {
+		new_num, ok := strconv.parse_f64(ctx.number_text)
+		if ok {
+			num^ = new_num
+		} else if len(ctx.number_text) == 0 {
+			num^ = 0
+		}
+	}
+	return res
+}
+int_box :: proc(num: ^int, opts: Option_Set, loc := #caller_location) -> Result_Set {
+	res := text_box(&ctx.number_text, opts, loc)
+	if .just_focused in res {
+		ctx.number_text = fmt.aprint(num^)
+		clear(&ctx.buffer)
+		append_elem_string(&ctx.buffer, ctx.number_text)
+	}
+	if .change in res {
+		new_num, ok := strconv.parse_int(ctx.number_text)
+		if ok {
+			num^ = new_num
+		} else if len(ctx.number_text) == 0 {
+			num^ = 0
+		}
+	}
+	return res
+}
+
 // submited when hovered, clicked then released
 BUTTON_HEIGHT :: 30
 button :: proc(title: string, opts: Option_Set, loc := #caller_location) -> Result_Set {
@@ -605,7 +642,7 @@ lock_mouse_to_slider :: proc(min, max, baseline: f32){
 }
 
 // slider
-slider :: proc(value: ^f32, min, max: f32, opts: Option_Set, loc := #caller_location) -> Result_Set {
+slider :: proc(value: ^f32, lo, hi: f32, title: string, opts: Option_Set, loc := #caller_location) -> Result_Set {
 	using ctx
 	using raylib
 	layout[layout_idx].size.y = 20
@@ -613,27 +650,29 @@ slider :: proc(value: ^f32, min, max: f32, opts: Option_Set, loc := #caller_loca
 		using control_state
 		update_control()
 		baseline := rect.y + 10
-		draw_rect({rect.x, baseline - 5, rect.width, 10}, style.colors[.fill])
+		draw_rect(rect, style.colors[.fill])
 		//DrawRectangleRec({rect.x, baseline - 5, rect.width, 10}, style.colors[.fill])
-		range := max - min
-		value_point := rect.x + rect.width * ((value^ - min) / range)
+		range := hi - lo
+		value_point := rect.x + rect.width * ((value^ - lo) / range)
 		hover_time := control.hover_time[idx]
-		fill := blend_colors(style.colors[.accent], BLACK, hover_time * 0.1)
+		fill := blend_colors(style.colors[.fill], BLACK, hover_time * 0.1 + 0.2)
 		//DrawRectangleRec({rect.x, baseline - 5, value_point - rect.x, 10}, fill)
-		draw_rect({rect.x, baseline - 5, value_point - rect.x, 10}, fill)
-		//draw_rounded_rect({value_point, baseline - 10, 10, 20}, 3, CORNER_VERTS, fill)
-		time := control.hover_time[idx]
-		hover_value := clamp(min + ((f32(GetMouseX()) - rect.x) / rect.width) * range, min, max)
-		if time > 0.01 {
-			point := rect.x + rect.width * ((hover_value - min) / range)
-			text := fmt.aprintf("%.2f", hover_value)
-			text_size := measure_string(style.font, text, 18)
-			text_size.x += style.text_padding * 2
-			draw_rect({point - text_size.x / 2, rect.y - 25, text_size.x, 20}, Fade(fill, time))
-			//draw_rounded_rect_pro({point - text_size.x / 2, rect.y - 25, text_size.x, 20}, {7, 7, 7, 7}, CORNER_VERTS, Fade(fill, time))
-			DrawTriangle({point - 5, rect.y - 5}, {point, rect.y}, {point + 5, rect.y - 5}, Fade(fill, time))
-			draw_aligned_string(style.font, text, {point, rect.y - 15}, 18, Fade(BLACK, time), .center, .center)
+		//draw_rect({rect.x, baseline - 5, value_point - rect.x, 10}, fill)
+		{
+			npatch := rect_npatch
+			npatch.right = 0
+			npatch.source.width -= 5
+			left := value_point - rect.x
+			limit := rect.width - 5
+			if left >= limit {
+				diff := left - limit
+				npatch.source.width += diff
+				npatch.right += i32(diff)
+			}
+			DrawTextureNPatch(rect_tex, npatch, {rect.x, rect.y, value_point - rect.x, rect.height}, {}, 0, fill)
 		}
+		draw_aligned_string(style.font, fmt.aprintf("%s: %.2f", title, value^), {rect.x + rect.width / 2, baseline}, cast(f32)style.font.baseSize, style.colors[.text], .center, .center)
+		hover_value := clamp(lo + ((f32(GetMouseX()) - rect.x) / rect.width) * range, lo, hi)
 		if .focus in res {
 			//hide_cursor = true
 			//lock_mouse_to_slider(rect.x + 5, rect.x + 6 + inner_size, baseline)

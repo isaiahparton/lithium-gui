@@ -45,7 +45,7 @@ erase_from_buffer :: proc(data: ^[dynamic]u8){
 }
 
 quick_seek_buffer :: proc(data: ^[dynamic]u8, from: int, back: bool) -> int{
-	m := back ? -1 : 1
+	m := -1 if back else 1
 	i := from
 	w := false
 	for {

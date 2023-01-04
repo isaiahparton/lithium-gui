@@ -81,6 +81,7 @@ Context :: struct {
 	layout: [MAX_LAYOUTS]Layout,
 	set_rect: bool,
 	// text entry
+	number_text: string,
 	buffer: [dynamic]u8,
 	cursor: Cursor,
 	hover_text: bool,
@@ -105,6 +106,7 @@ Context :: struct {
 	tex_offset: [2]f32,
 	max_panel_height: f32,
 	widget_tex: raylib.Texture,
+	shadow_tex: raylib.Texture,
 	widget_npatch: raylib.NPatchInfo,
 	rect_tex: raylib.Texture,
 	rect_npatch: raylib.NPatchInfo,
@@ -123,6 +125,7 @@ init_context :: proc(){
 		icon_atlas = raylib.LoadTexture("./icons/atlas.png")
 		icon_cols = cast(int)icon_atlas.width / style.icon_size
 		widget_tex = raylib.LoadTexture("./widget.png")
+		shadow_tex = raylib.LoadTexture("./shadow.png")
 		widget_npatch = { { 0, 0, cast(f32)widget_tex.width, cast(f32)widget_tex.height }, 40, 40, 40, 40, .NINE_PATCH }
 		rect_tex = raylib.LoadTexture("./rect.png")
 		rect_npatch = { { 0, 0, cast(f32)rect_tex.width, cast(f32)rect_tex.height }, 5, 5, 5, 5, .NINE_PATCH }
@@ -305,7 +308,7 @@ end :: proc(){
 		}
 		time = clamp(time, 0, 1)
 		dst := Rectangle{-half_width, -half_height, rect.width, rect.height}
-		DrawTextureNPatch(widget_tex, widget_npatch, {dst.x - 40, dst.y - 40, dst.width + 80, dst.height + 80}, {0, 0}, 0, WHITE)
+		DrawTextureNPatch(shadow_tex, widget_npatch, expand_rect(dst, 41), {0, 0}, 0, WHITE)
 		radius := style.corner_radius * 2
 		draw_render_surface(panel_tex, {tex_offset.x, tex_offset.y, rect.width, rect.height}, dst, Fade(WHITE, self.time))
 		rlPopMatrix()

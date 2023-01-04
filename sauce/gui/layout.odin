@@ -89,6 +89,14 @@ layout_reset_spacing :: proc(){
 layout_set_size :: proc(width, height: f32){
 	ctx.layout[ctx.layout_idx].size = {width, height}
 }
+layout_set_width :: proc(width: f32, relative: bool) {
+	layout := &ctx.layout[ctx.layout_idx]
+	layout.size.x = width
+	if relative {
+		layout.size.x *= layout.full_rect.width
+	}
+	layout.size.x -= ctx.style.padding
+}
 layout_set_side :: proc(side: Rect_Side){
 	ctx.layout[ctx.layout_idx].side = side
 }

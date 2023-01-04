@@ -10,8 +10,9 @@ main :: proc(){
 	using raylib
 
 	vals := [3]bool{false, false, false}
-	lo, hi := f32(0), f32(100)
+	amogus := 0
 	text1, text2 := "", ""
+	clr := [4]f32{}
 
 	SetConfigFlags({.WINDOW_RESIZABLE})//, .MSAA_4X_HINT})
 	InitWindow(1400, 900, "lithium-gui demo")
@@ -45,11 +46,20 @@ main :: proc(){
 			end_widget()
 		}
 		if begin_widget({ctx.width / 2 + 25, 50, ctx.width / 2 - 75, ctx.height - 100}, "Other Stuff", {}) {
-			text("Corner radius", .near, .near, {})
-			slider(&ctx.style.corner_radius, 0, 10, {})
+			res := Result_Set{}
+			res += slider(&clr.r, 0, 1, "R", {})
+			res += slider(&clr.g, 0, 1, "G", {})
+			res += slider(&clr.b, 0, 1, "B", {})
+			res += slider(&clr.a, 0, 1, "A", {})
+			if .change in res {
+				ctx.style.colors[.background] = {u8(clr.r * 255), u8(clr.g * 255), u8(clr.b * 255), u8(clr.a * 255)}
+			}
+			int_box(&amogus, {})
+			text(fmt.aprint(amogus), .near, .near, {})
 			//knob(&ctx.style.corner_radius, 0, 10, "hi",  {})
 			end_widget()
 		}
+		
 
 		draw_string(ctx.style.font, fmt.aprintf("%i fps", GetFPS()), {0, 0}, 26, BLACK)
 		draw_string(ctx.style.font, count_noun(ctx.control_count, "control"), {0, 26}, 26, BLACK)

@@ -78,8 +78,7 @@ begin_widget :: proc(rect: Rectangle, title: string, opts: Option_Set, loc := #c
 	}
 	max_panel_height = max(max_panel_height, self.rect.height)
 	radius := style.corner_radius * 2
-	//draw_rounded_rect(self.rect, radius, CORNER_VERTS, style.colors[.foreground])
-	raylib.DrawRectangleRec(self.rect, style.colors[.foreground])
+	raylib.DrawTextureNPatch(widget_tex, widget_npatch, expand_rect(self.rect, 41), {}, 0, style.colors[.foreground])
 	push_layout()
 	return true
 }
