@@ -8,6 +8,7 @@ WidgetIndex :: u8
 
 Widget :: struct {
 	exists: bool,
+	open: bool,
 	time: f32,
 	title: string,
 	contents: map[Id]int,
@@ -18,30 +19,47 @@ Widget :: struct {
 	opts: Option_Set,
 }
 
-begin_widget :: proc(rect: Rectangle, title: string, opts: Option_Set, loc := #caller_location) -> bool {
+@private
+_get_widget_idx :: proc(title: string, opts: Option_Set) -> int {
 	using ctx
-	assert(widget_count + 1 < MAX_WIDGETS, "begin_widget(): Widget stack overflow")
 	//--- hash the caller location and lookup ---//
-	id := get_loc_id(loc)
+	id := get_id_string(title)
 	idx, ok := widget_map[id]
-	//--- if none is found reserve one ---//
-	if !ok {
-		for i := 0; i < MAX_WIDGETS; i += 1 {
-			if !widget_reserved[i] {
-				idx = i
-				widget[i] = {id=id}
-				append(&widget_stack, i)
-				break
-			}
-			if i == MAX_WIDGETS - 1 {
-				return false
-			}
+	if ok {
+		return idx
+	}
+	//--- not found, init a new one ---//
+	for i := 0; i < MAX_WIDGETS; i += 1 {
+		if !widget_reserved[i] {
+			idx = i
+			widget[i] = {id = id, exists = true}
+			widget_map[id] = idx
+			widget_reserved[idx] = true
+			append(&widget_stack, i)
+			return idx
 		}
 	}
-	widget_reserved[idx] = true
-	widget_map[id] = idx
-	//--- update widget data ---//
+	return -1
+}
+@private
+_get_widget :: proc(title: string, opts: Option_Set) -> ^Widget {
+	return &ctx.widget[_get_widget_idx(title, opts)]
+}
+
+begin_widget :: proc(rect: Rectangle, title: string, opts: Option_Set, loc := #caller_location) -> bool {
+	using ctx
+	assert(title != "", "begin_widget(): Missing widget title")
+	assert(widget_count + 1 < MAX_WIDGETS, "begin_widget(): Widget stack overflow")
+	idx := _get_widget_idx(title, opts)
+	if idx < 0 {
+		return false
+	}
 	self := &widget[idx]
+	//--- check if the widget exists and is open ---//
+	if (self == nil) || (!self.open) {
+		return false
+	}
+	//--- update widget data ---//
 	self.exists = true
 	self.title = title
 	self.opts = opts
@@ -54,12 +72,10 @@ begin_widget :: proc(rect: Rectangle, title: string, opts: Option_Set, loc := #c
 	}
 	self.space = {}
 	widget_rect = self.rect
-
 	//--- current widget state ---//
 	widget_count += 1
 	widget_idx = idx
 	widget_hover = (active_widget == idx)
-
 	//--- setup surface area for drawing ---//
 	raylib.BeginTextureMode(panel_tex)
 	if widget_count == 1 {
@@ -97,4 +113,12 @@ end_widget :: proc(){
 			control.reserved[idx] = false
 		}
 	}
+}
+
+begin_popup :: proc(name: string, opts: Option_Set, loc := #caller_location) -> bool {
+
+	return true
+}
+end_popup :: proc(){
+
 }

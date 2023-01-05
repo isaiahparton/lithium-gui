@@ -196,7 +196,7 @@ get_control_rect :: proc(opts: Option_Set) -> Rectangle {
 		inner_rect := ctx.widget[ctx.widget_idx].inner_rect
 		rect := Rectangle{inner_rect.x, inner_rect.y, inner_rect.width, layout.size.y}
 		if ctx.cnt_idx >= 0 {
-			offset := ctx.cnt_data[ctx.cnt_idx].offset
+			offset := ctx.cnt_data[ctx.cnt_idx].scroll
 			rect.x += offset.x
 			rect.y += offset.y
 		}
@@ -490,7 +490,7 @@ fancy_text_box :: proc(content: ^string, title: string, opts: Option_Set, loc :=
 	return end_control()
 }
 
-f32_box :: proc(num: ^f32, opts: Option_Set, loc := #caller_location) -> Result_Set {
+number_box :: proc(num: ^f32, opts: Option_Set, loc := #caller_location) -> Result_Set {
 	using ctx
 	using raylib
 	ctx.layout[ctx.layout_idx].size.y = f32(style.font.baseSize) + style.text_padding * 2
@@ -516,23 +516,6 @@ f32_box :: proc(num: ^f32, opts: Option_Set, loc := #caller_location) -> Result_
 		}
 	}
 	return end_control()
-}
-int_box :: proc(num: ^int, opts: Option_Set, loc := #caller_location) -> Result_Set {
-	res := text_box(&ctx.number_text, opts, loc)
-	if .just_focused in res {
-		ctx.number_text = fmt.aprint(num^)
-		clear(&ctx.buffer)
-		append_elem_string(&ctx.buffer, ctx.number_text)
-	}
-	if .change in res {
-		new_num, ok := strconv.parse_int(ctx.number_text)
-		if ok {
-			num^ = new_num
-		} else if len(ctx.number_text) == 0 {
-			num^ = 0
-		}
-	}
-	return res
 }
 
 // submited when hovered, clicked then released

@@ -4,7 +4,7 @@ import "vendor:raylib"
 MAX_CONTAINERS :: 32
 Container :: struct {
 	rect, used_space: Rectangle,
-	offset, offset_target, space: [2]f32,
+	scroll, scroll_target, space: [2]f32,
 }
 
 push_container :: proc(rect: Rectangle, opts: Option_Set, loc := #caller_location) {
@@ -32,28 +32,28 @@ push_container :: proc(rect: Rectangle, opts: Option_Set, loc := #caller_locatio
 	self.used_space = {}
 
 	//--- update scrolling/panning ---//
-	self.offset += (self.offset_target - self.offset) * 20 * raylib.GetFrameTime()
+	self.scroll += (self.scroll_target - self.scroll) * 20 * raylib.GetFrameTime()
 	if widget_hover {
 		delta := raylib.GetMouseWheelMove() * 77
 		if raylib.IsKeyDown(.LEFT_SHIFT) {
-			self.offset_target.x -= delta
+			self.scroll_target.x -= delta
 		} else {
-			self.offset_target.y -= delta
+			self.scroll_target.y -= delta
 		}
 		if raylib.IsMouseButtonPressed(.MIDDLE) {
-			drag_from = mouse_point + self.offset
+			drag_from = mouse_point + self.scroll
 		}
 		if raylib.IsMouseButtonDown(.MIDDLE) {
-			self.offset = drag_from - mouse_point
-			self.offset_target = self.offset
+			self.scroll = drag_from - mouse_point
+			self.scroll_target = self.scroll
 		}
 	}
 	self.space += style.padding
 	max_x, max_y := max(0, self.space.x - rect.width), max(0, self.space.y - rect.height)
-	self.offset.x = clamp(self.offset.x, 0, max_x)
-	self.offset_target.x = clamp(self.offset_target.x, 0, max_x)
-	self.offset.y = clamp(self.offset.y, 0, max_y)
-	self.offset_target.y = clamp(self.offset_target.y, 0, max_y)
+	self.scroll.x = clamp(self.scroll.x, 0, max_x)
+	self.scroll_target.x = clamp(self.scroll_target.x, 0, max_x)
+	self.scroll.y = clamp(self.scroll.y, 0, max_y)
+	self.scroll_target.y = clamp(self.scroll_target.y, 0, max_y)
 
 	raylib.BeginScissorMode(i32(tex_offset.x), i32(tex_offset.y), i32(rect.width), i32(rect.height))
 	push_layout()

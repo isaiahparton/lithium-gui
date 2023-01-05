@@ -30,7 +30,7 @@ main :: proc(){
 
 		begin()
 
-		if begin_widget({50, 50, ctx.width / 2 - 75, ctx.height - 100}, "Main Stuff", {}) {
+		if begin_widget({50, 50, ctx.width / 2 - 75, ctx.height - 100}, "main", {}) {
 			text("fancy text input", .near, .near, {})
 			fancy_text_box(&text1, "Type something here", {})
 			text("regular text input", .near, .near, {})
@@ -45,21 +45,25 @@ main :: proc(){
 			button("SUBTLE", {.subtle})
 			end_widget()
 		}
-		if begin_widget({ctx.width / 2 + 25, 50, ctx.width / 2 - 75, ctx.height - 100}, "Other Stuff", {}) {
+		if begin_widget({ctx.width / 2 + 25, 50, ctx.width / 2 - 75, ctx.height - 100}, "colors", {}) {
 			res := Result_Set{}
 			res += slider(&clr.r, 0, 1, "R", {})
 			res += slider(&clr.g, 0, 1, "G", {})
 			res += slider(&clr.b, 0, 1, "B", {})
 			res += slider(&clr.a, 0, 1, "A", {})
-			res += f32_box(&clr.r, {})
-			res += f32_box(&clr.g, {})
-			res += f32_box(&clr.b, {})
-			res += f32_box(&clr.a, {})
+			res += number_box(&clr.r, {})
+			res += number_box(&clr.g, {})
+			res += number_box(&clr.b, {})
+			res += number_box(&clr.a, {})
 			if .change in res {
 				ctx.style.colors[.background] = {u8(clr.r * 255), u8(clr.g * 255), u8(clr.b * 255), u8(clr.a * 255)}
 			}
 			//knob(&ctx.style.corner_radius, 0, 10, "hi",  {})
 			end_widget()
+		}
+		if begin_popup("my popup", {}) {
+
+			end_popup()
 		}
 		
 
