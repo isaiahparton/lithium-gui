@@ -51,11 +51,13 @@ main :: proc(){
 			res += slider(&clr.g, 0, 1, "G", {})
 			res += slider(&clr.b, 0, 1, "B", {})
 			res += slider(&clr.a, 0, 1, "A", {})
+			res += f32_box(&clr.r, {})
+			res += f32_box(&clr.g, {})
+			res += f32_box(&clr.b, {})
+			res += f32_box(&clr.a, {})
 			if .change in res {
 				ctx.style.colors[.background] = {u8(clr.r * 255), u8(clr.g * 255), u8(clr.b * 255), u8(clr.a * 255)}
 			}
-			int_box(&amogus, {})
-			text(fmt.aprint(amogus), .near, .near, {})
 			//knob(&ctx.style.corner_radius, 0, 10, "hi",  {})
 			end_widget()
 		}

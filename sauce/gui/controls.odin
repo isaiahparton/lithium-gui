@@ -490,22 +490,32 @@ fancy_text_box :: proc(content: ^string, title: string, opts: Option_Set, loc :=
 	return end_control()
 }
 
-f64_box :: proc(num: ^f64, opts: Option_Set, loc := #caller_location) -> Result_Set {
-	res := text_box(&ctx.number_text, opts, loc)
-	if .just_focused in res {
-		ctx.number_text = fmt.aprint(num^)
-		clear(&ctx.buffer)
-		append_elem_string(&ctx.buffer, ctx.number_text)
-	}
-	if .change in res {
-		new_num, ok := strconv.parse_f64(ctx.number_text)
-		if ok {
-			num^ = new_num
-		} else if len(ctx.number_text) == 0 {
-			num^ = 0
+f32_box :: proc(num: ^f32, opts: Option_Set, loc := #caller_location) -> Result_Set {
+	using ctx
+	using raylib
+	ctx.layout[ctx.layout_idx].size.y = f32(style.font.baseSize) + style.text_padding * 2
+	if begin_control(opts + {.hold_focus}, loc) {
+		using control_state
+		update_control()
+		fill := blend_colors(style.colors[.fill], BLACK, min(1, control.hover_time[idx] + control.focus_time[idx]) * 0.1)
+		draw_rounded_rect(rect, style.corner_radius, CORNER_VERTS, fill)
+		num_text := fmt.aprint(num^)
+		if .just_focused in res {
+			ctx.number_text = num_text
+			clear(&ctx.buffer)
+			append_elem_string(&ctx.buffer, ctx.number_text)
+		}
+		mutable_text(rect, &res, &ctx.number_text if (.focus in res) else &num_text)
+		if .change in res {
+			new_num, ok := strconv.parse_f32(ctx.number_text)
+			if ok {
+				num^ = new_num
+			} else if len(ctx.number_text) == 0 {
+				num^ = 0
+			}
 		}
 	}
-	return res
+	return end_control()
 }
 int_box :: proc(num: ^int, opts: Option_Set, loc := #caller_location) -> Result_Set {
 	res := text_box(&ctx.number_text, opts, loc)
