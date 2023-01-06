@@ -291,32 +291,37 @@ end :: proc(){
 	}
 	
 	for i, idx in widget_stack {
-		if !(widget_reserved[i] || widget[i].time > 0.01) {
+		if !widget_reserved[i] {
 			continue
 		}
 		using self := &widget[i]
+		if !self.exists || self.hidden {
+			time = 0
+			continue
+		}
 		self.z = idx
 		half_width, half_height := rect.width / 2, rect.height / 2
 		rlPushMatrix()
 		rlTranslatef(rect.x + half_width, rect.y + half_height, 0)
-		if widget_reserved[i] {
-			rlScalef(1.1 - time * 0.1, 1.1 - time * 0.1, 0)
-			time += FADE_SPEED * GetFrameTime()
-		} else {
-			rlScalef(0.9 + time * 0.1, 0.9 + time * 0.1, 0)
-			time -= FADE_SPEED * GetFrameTime()
-		}
-		time = clamp(time, 0, 1)
 		dst := Rectangle{-half_width, -half_height, rect.width, rect.height}
-		DrawTextureNPatch(shadow_tex, widget_npatch, expand_rect(dst, 41), {0, 0}, 0, WHITE)
-		radius := style.corner_radius * 2
-		draw_render_surface(panel_tex, {tex_offset.x, tex_offset.y, rect.width, rect.height}, dst, Fade(WHITE, self.time))
+		dst = expand_rect(dst, SHADOW_SPACE)
+		if hidden {
+			//rlScalef(0.9 + time * 0.05, 0.9 + time * 0.05, 0)
+			time -= FADE_SPEED * GetFrameTime()
+		} else {
+			//rlScalef(1.1 - time * 0.1, 1.1 - time * 0.1, 0)
+			time += (1 - time) * 20 * GetFrameTime()
+		}
+		draw_render_surface(panel_tex, {tex_offset.x, tex_offset.y, rect.width + SHADOW_SPACE * 2, rect.height + SHADOW_SPACE * 2}, dst, Fade(WHITE, time))
 		rlPopMatrix()
 
 		if !self.exists {
 			delete_key(&widget_map, self.id)
+			widget_reserved[i] = false
 		}
-		self.exists = false
+		if hidden && time < 0.1 {
+			self.exists = false
+		}
 	}
 		
 	

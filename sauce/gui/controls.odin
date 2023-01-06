@@ -16,6 +16,7 @@ Option :: enum {
 	hold_focus,
 	draggable,
 	inner,
+	hidden,
 	uniform,
 	subtle,
 	align_center,

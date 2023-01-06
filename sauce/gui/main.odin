@@ -41,11 +41,12 @@ main :: proc(){
 			checkbox(&vals[1], "second", {})
 			checkbox(&vals[2], "third", {})
 			pop_layout()
-			button("CLICK ME", {})
-			button("SUBTLE", {.subtle})
+			if .submit in button("toggle color picker", {}) {
+				toggle_widget("colors")
+			}
 			end_widget()
 		}
-		if begin_widget({ctx.width / 2 + 25, 50, ctx.width / 2 - 75, ctx.height - 100}, "colors", {}) {
+		if begin_widget({ctx.width / 2 + 25, 50, ctx.width / 2 - 75, ctx.height - 100}, "colors", {.hidden}) {
 			res := Result_Set{}
 			res += slider(&clr.r, 0, 1, "R", {})
 			res += slider(&clr.g, 0, 1, "G", {})
