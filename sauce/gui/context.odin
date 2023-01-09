@@ -280,6 +280,8 @@ end :: proc(){
 					top = idx
 				}
 				active_widget = i
+			} else if (.popup in widget[i].opts) && IsMouseButtonPressed(.LEFT) {
+				widget[i].closing = true
 			}
 		}
 		if top != prev_top && (.topmost not_in widget[widget_stack[prev_top]].opts) {
@@ -291,6 +293,7 @@ end :: proc(){
 	
 	for i, idx in widget_stack {
 		using self := &widget[i]
+		z = idx
 		if !self.exists {
 			time = 0
 			continue
@@ -301,10 +304,8 @@ end :: proc(){
 		dst := Rectangle{-half_width, -half_height, rect.width, rect.height}
 		dst = expand_rect(dst, SHADOW_SPACE)
 		if closing {
-			//rlScalef(0.9 + time * 0.05, 0.9 + time * 0.05, 0)
 			time -= FADE_SPEED * GetFrameTime()
 		} else {
-			//rlScalef(1.1 - time * 0.1, 1.1 - time * 0.1, 0)
 			time += (1 - time) * FADE_SPEED * GetFrameTime()
 		}
 		if idx == len(widget_stack) - 1 {
@@ -325,9 +326,12 @@ end :: proc(){
 				dst.x += FACTOR * (1 - time)
 			}
 		}
-		draw_render_surface(panel_tex, {tex_offset.x, tex_offset.y, dst.width, dst.height}, dst, Fade(blend_colors({240, 240, 240, 255}, WHITE, opacity), time))
+		draw_render_surface(panel_tex, {tex_offset.x, tex_offset.y, dst.width, dst.height}, dst, Fade(blend_colors({245, 245, 245, 255}, WHITE, opacity), time))
 		rlPopMatrix()
 
+		if closing && time < 0.1 {
+			self.exists = false
+		}
 		if !self.exists {
 			ordered_remove(&widget_stack, idx)
 			delete_key(&widget_map, self.id)
@@ -335,8 +339,7 @@ end :: proc(){
 		}
 		self.exists = false
 	}
-		
-	
+
 	widget_count = 0
 
 	if IsMouseButtonReleased(.LEFT) {

@@ -40,16 +40,15 @@ main :: proc(){
 			checkbox(&vals[1], "second", {})
 			checkbox(&vals[2], "third", {})
 			pop_layout()
-			if (.submit in button("toggle color picker", {})) || IsKeyPressed(.F) {
+			if (.submit in button("print invoice", {})) {
 				toggle_popup("color")
 			}
 			end_widget()
 		}
 		if begin_popup({-200, 20, 400, 400}, {0.5, 0.5, 0, 0}, "color", {.expand_down}) {
-			u8_slider(&ctx.style.colors[.background].r, 0, 255, "R", {})
-			u8_slider(&ctx.style.colors[.background].g, 0, 255, "G", {})
-			u8_slider(&ctx.style.colors[.background].b, 0, 255, "B", {})
-			u8_slider(&ctx.style.colors[.background].a, 0, 255, "A", {})
+			text("hello there", .center, .near, {.align_center})
+			fancy_text_box(&text1, "Name", {})
+			fancy_text_box(&text1, "Address", {})
 			end_popup()
 		}
 		

@@ -16,6 +16,7 @@ Widget :: struct {
 	rect, inner_rect: Rectangle,
 	space, tex_offset: [2]f32,
 	id: Id,
+	z: int,
 	opts: Option_Set,
 }
 
@@ -27,6 +28,10 @@ _get_widget_idx :: proc(title: string, opts: Option_Set) -> int {
 	idx, ok := widget_map[id]
 	if ok {
 		return idx
+	}
+	//--- if the widget is supposed to be closed initially, don't create it ---//
+	if .closed in opts {
+		return -1
 	}
 	//--- not found, init a new one ---//
 	for i := 0; i < MAX_WIDGETS; i += 1 {
@@ -54,7 +59,27 @@ _bring_to_top :: proc(idx: int) {
 	widget_stack[idx] = top_idx
 }
 
-begin_widget :: proc(a_rect, r_rect: Rectangle, title: string, opts: Option_Set, loc := #caller_location) -> bool {
+@private
+_create_widget :: proc(id: Id) -> int {
+	using ctx
+	for i := 0; i < MAX_WIDGETS; i += 1 {
+		if !widget_reserved[i] {
+			widget[i] = {id = id, exists = true}
+			widget_map[id] = i
+			widget_reserved[i] = true
+			append(&widget_stack, i)
+			return i
+		}
+	}
+	return -1
+}
+@private
+_destroy_widget :: proc(idx: int) {
+	using ctx
+	
+}
+
+begin_widget :: proc(a_rect, r_rect: Rectangle, title: string, opts: Option_Set) -> bool {
 	using ctx
 	assert(title != "", "begin_widget(): Missing widget title")
 	assert(widget_count + 1 < MAX_WIDGETS, "begin_widget(): Widget stack overflow")
@@ -88,7 +113,7 @@ begin_widget :: proc(a_rect, r_rect: Rectangle, title: string, opts: Option_Set,
 	//--- current widget state ---//
 	widget_count += 1
 	widget_idx = idx
-	widget_hover = (active_widget == idx)
+	widget_hover = (active_widget == idx && widget_stack[len(widget_stack) - 1] == idx)
 	//--- setup surface area for drawing ---//
 	raylib.BeginTextureMode(panel_tex)
 	if widget_count == 1 {
@@ -115,7 +140,10 @@ begin_widget :: proc(a_rect, r_rect: Rectangle, title: string, opts: Option_Set,
 }
 end_widget :: proc(){
 	using ctx
+	using raylib
 	pop_layout()
+	expanded_rect := expand_rect(widget[widget_idx].rect, 32)
+	raylib.DrawTextureNPatch(widget_tex, widget_npatch, expanded_rect, {}, 0, Fade(WHITE, (1.0 - widget[widget_idx].opacity) * 0.35))
 	raylib.rlPopMatrix()
 	raylib.EndTextureMode()
 
@@ -130,20 +158,26 @@ end_widget :: proc(){
 	}
 }
 
-open_popup :: proc(name: string) {
+open_popup :: proc(idx: int) {
 
 }
-close_popup :: proc(name: string) {
-
+close_popup :: proc(idx: int) {
+	ctx.widget[idx].closing = true
 }
 toggle_popup :: proc(name: string) {
-
+	using ctx
+	id := get_id_string(name)
+	idx, ok := widget_map[id]
+	if ok {
+		widget[idx].closing = true
+	} else {
+		_create_widget(id)
+	}
 }
 
-begin_popup :: proc(a_rect, r_rect: Rectangle, name: string, opts: Option_Set, loc := #caller_location) -> bool {
-
-	return false
+begin_popup :: proc(a_rect, r_rect: Rectangle, name: string, opts: Option_Set) -> bool {
+	return begin_widget(a_rect, r_rect, name, opts + {.closed, .popup, .topmost})
 }
 end_popup :: proc(){
-
+	end_widget()
 }

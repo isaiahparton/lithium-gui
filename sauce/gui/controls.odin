@@ -16,17 +16,17 @@ Option :: enum {
 	hold_focus,
 	draggable,
 	inner,
-	hidden,
+	closed,
 	uniform,
 	subtle,
 	align_center,
 	align_far,
 	popup,
+	topmost,
 	expand_down,
 	expand_up,
 	expand_right,
 	expand_left,
-	topmost,
 }
 Option_Set :: bit_set[Option;u16]
 
