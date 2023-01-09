@@ -21,8 +21,12 @@ Option :: enum {
 	subtle,
 	align_center,
 	align_far,
-	allow_scroll,
-	no_connect,
+	popup,
+	expand_down,
+	expand_up,
+	expand_right,
+	expand_left,
+	topmost,
 }
 Option_Set :: bit_set[Option;u16]
 
@@ -176,10 +180,8 @@ begin_static_control :: proc(_opts: Option_Set) -> bool {
 end_control :: proc() -> Result_Set {
 	using ctx.control_state
 	layout := &ctx.layout[ctx.layout_idx]
-	if .no_connect not_in opts {
-		layout.size = {rect.width, rect.height}
-		layout.last_rect = rect
-	}
+	layout.size = {rect.width, rect.height}
+	layout.last_rect = rect
 	layout.full_rect.x = min(layout.full_rect.x, rect.x)
 	layout.full_rect.y = min(layout.full_rect.y, rect.y)
 	layout.full_rect.width = max(layout.full_rect.width, rect.width + (rect.x - layout.full_rect.x))
@@ -194,14 +196,19 @@ end_free_control :: proc() -> Result_Set {
 get_control_rect :: proc(opts: Option_Set) -> Rectangle {
 	layout := &ctx.layout[ctx.layout_idx]
 	if layout.last_rect == {} {
-		inner_rect := ctx.widget[ctx.widget_idx].inner_rect
-		rect := Rectangle{inner_rect.x, inner_rect.y, inner_rect.width, layout.size.y}
-		if ctx.cnt_idx >= 0 {
-			offset := ctx.cnt_data[ctx.cnt_idx].scroll
-			rect.x += offset.x
-			rect.y += offset.y
+		if ctx.layout_idx > 0 {
+			prev_layout := &ctx.layout[ctx.layout_idx - 1]
+			return get_next_rect(prev_layout.full_rect, layout.size, prev_layout.side, opts)
+		} else {
+			inner_rect := ctx.widget[ctx.widget_idx].inner_rect
+			rect := Rectangle{inner_rect.x, inner_rect.y, inner_rect.width, layout.size.y}
+			if ctx.cnt_idx >= 0 {
+				offset := ctx.cnt_data[ctx.cnt_idx].scroll
+				rect.x += offset.x
+				rect.y += offset.y
+			}
+			return rect
 		}
-		return rect
 	}
 	return get_next_rect(layout.last_rect, layout.size, layout.side, opts)
 }
@@ -529,22 +536,22 @@ button :: proc(title: string, opts: Option_Set, loc := #caller_location) -> Resu
 		using control_state
 		update_control()
 		if .subtle in opts {
-			draw_rounded_rect(rect, style.corner_radius, CORNER_VERTS, Fade(BLACK, control.hover_time[idx] * 0.1))
+			draw_rect(rect, Fade(BLACK, control.hover_time[idx] * 0.1))
 			scale := control.focus_time[idx]
 			if .focus in res {
-				draw_rounded_rect({rect.x + (rect.width / 2) * (1 - scale), rect.y + (rect.height / 2) * (1 - scale), rect.width * scale, rect.height * scale}, style.corner_radius, CORNER_VERTS, Fade(BLACK, scale * 0.1))
+				draw_rect({rect.x + (rect.width / 2) * (1 - scale), rect.y + (rect.height / 2) * (1 - scale), rect.width * scale, rect.height * scale}, Fade(BLACK, scale * 0.1))
 			} else {
-				draw_rounded_rect(rect, style.corner_radius, CORNER_VERTS, Fade(BLACK, scale * 0.1))
+				draw_rect(rect, Fade(BLACK, scale * 0.1))
 			}
 			draw_rounded_rect_lines(expand_rect(rect, -2), style.corner_radius, CORNER_VERTS, 2.0, style.colors[.text])
 			draw_aligned_string(style.font, title, {rect.x + rect.width / 2, rect.y + rect.height / 2}, cast(f32)style.font.baseSize, style.colors[.text], .center, .center)
 		} else {
-			draw_rounded_rect(rect, style.corner_radius, CORNER_VERTS, blend_colors(style.colors[.highlight], WHITE, control.hover_time[idx] * 0.1))
+			draw_rect(rect, blend_colors(style.colors[.highlight], WHITE, control.hover_time[idx] * 0.1))
 			scale := control.focus_time[idx]
 			if .focus in res {
-				draw_rounded_rect({rect.x + (rect.width / 2) * (1 - scale), rect.y + (rect.height / 2) * (1 - scale), rect.width * scale, rect.height * scale}, style.corner_radius, CORNER_VERTS, Fade(WHITE, scale * 0.1))
+				draw_rect({rect.x + (rect.width / 2) * (1 - scale), rect.y + (rect.height / 2) * (1 - scale), rect.width * scale, rect.height * scale}, Fade(WHITE, scale * 0.1))
 			} else {
-				draw_rounded_rect(rect, style.corner_radius, CORNER_VERTS, Fade(WHITE, scale * 0.1))
+				draw_rect(rect, Fade(WHITE, scale * 0.1))
 			}
 			draw_aligned_string(style.font, title, {rect.x + rect.width / 2, rect.y + rect.height / 2}, cast(f32)style.font.baseSize, style.colors[.foreground], .center, .center)
 		}
@@ -636,7 +643,7 @@ lock_mouse_to_slider :: proc(min, max, baseline: f32){
 }
 
 // slider
-slider :: proc(value: ^f32, lo, hi: f32, title: string, opts: Option_Set, loc := #caller_location) -> Result_Set {
+slider :: proc(value: ^f64, lo, hi: f64, title: string, opts: Option_Set, loc := #caller_location) -> Result_Set {
 	using ctx
 	using raylib
 	layout[layout_idx].size.y = 20
@@ -647,11 +654,9 @@ slider :: proc(value: ^f32, lo, hi: f32, title: string, opts: Option_Set, loc :=
 		draw_rect(rect, style.colors[.fill])
 		//DrawRectangleRec({rect.x, baseline - 5, rect.width, 10}, style.colors[.fill])
 		range := hi - lo
-		value_point := rect.x + rect.width * ((value^ - lo) / range)
+		value_point := rect.x + rect.width * f32(clamp(((value^ - lo) / range), 0, 1))
 		hover_time := control.hover_time[idx]
 		fill := blend_colors(style.colors[.fill], BLACK, hover_time * 0.1 + 0.2)
-		//DrawRectangleRec({rect.x, baseline - 5, value_point - rect.x, 10}, fill)
-		//draw_rect({rect.x, baseline - 5, value_point - rect.x, 10}, fill)
 		{
 			npatch := rect_npatch
 			npatch.right = 0
@@ -665,8 +670,8 @@ slider :: proc(value: ^f32, lo, hi: f32, title: string, opts: Option_Set, loc :=
 			}
 			DrawTextureNPatch(rect_tex, npatch, {rect.x, rect.y, value_point - rect.x, rect.height}, {}, 0, fill)
 		}
-		draw_aligned_string(style.font, fmt.aprintf("%s: %.2f", title, value^), {rect.x + rect.width / 2, baseline}, cast(f32)style.font.baseSize, style.colors[.text], .center, .center)
-		hover_value := clamp(lo + ((f32(GetMouseX()) - rect.x) / rect.width) * range, lo, hi)
+		draw_aligned_string(style.font, title, {rect.x + rect.width / 2, baseline}, cast(f32)style.font.baseSize, style.colors[.text], .center, .center)
+		hover_value := clamp(lo + f64((f32(GetMouseX()) - rect.x) / rect.width) * range, lo, hi)
 		if .focus in res {
 			//hide_cursor = true
 			//lock_mouse_to_slider(rect.x + 5, rect.x + 6 + inner_size, baseline)
@@ -678,6 +683,14 @@ slider :: proc(value: ^f32, lo, hi: f32, title: string, opts: Option_Set, loc :=
 		}
 	}
 	return end_control()
+}
+u8_slider :: proc(value: ^u8, lo, hi: u8, title: string, opts: Option_Set, loc := #caller_location) -> Result_Set {
+	f_value, f_lo, f_hi := f64(value^), f64(lo), f64(hi)
+	res := slider(&f_value, f_lo, f_hi, fmt.aprintf("%s: %i", title, value^), {}, loc)
+	if .change in res {
+		value^ = u8(f_value)
+	}
+	return res
 }
 
 range_slider :: proc(low, high: ^f32, min, max: f32, opts: Option_Set, loc := #caller_location) -> Result_Set {

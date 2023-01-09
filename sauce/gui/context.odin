@@ -195,21 +195,20 @@ begin :: proc(){
 		key_pulse = true
 	}
 
+	double_click = false
 	if click {
-		double_click_timer += GetFrameTime()
-		if IsMouseButtonPressed(.LEFT) {
-			double_click = true
-			click = false
-		}
 		if double_click_timer >= DOUBLE_CLICK_TIME {
 			click = false
 		}
+		if IsMouseButtonReleased(.LEFT) {
+			double_click = true
+			click = false
+		}
+		double_click_timer += GetFrameTime()
 	} else {
-		if IsMouseButtonPressed(.LEFT) {
+		if IsMouseButtonReleased(.LEFT) {
 			click = true
 			double_click_timer = 0
-		}
-		if IsMouseButtonReleased(.LEFT) {
 			double_click = false
 		}
 	}
@@ -283,7 +282,7 @@ end :: proc(){
 				active_widget = i
 			}
 		}
-		if top != prev_top {
+		if top != prev_top && (.topmost not_in widget[widget_stack[prev_top]].opts) {
 			idx := widget_stack[top]
 			copy(widget_stack[top:], widget_stack[top + 1:])
 			widget_stack[prev_top] = idx
@@ -291,37 +290,50 @@ end :: proc(){
 	}
 	
 	for i, idx in widget_stack {
-		if !widget_reserved[i] {
-			continue
-		}
 		using self := &widget[i]
-		if !self.exists || self.hidden {
+		if !self.exists {
 			time = 0
 			continue
 		}
-		self.z = idx
 		half_width, half_height := rect.width / 2, rect.height / 2
 		rlPushMatrix()
 		rlTranslatef(rect.x + half_width, rect.y + half_height, 0)
 		dst := Rectangle{-half_width, -half_height, rect.width, rect.height}
 		dst = expand_rect(dst, SHADOW_SPACE)
-		if hidden {
+		if closing {
 			//rlScalef(0.9 + time * 0.05, 0.9 + time * 0.05, 0)
 			time -= FADE_SPEED * GetFrameTime()
 		} else {
 			//rlScalef(1.1 - time * 0.1, 1.1 - time * 0.1, 0)
-			time += (1 - time) * 20 * GetFrameTime()
+			time += (1 - time) * FADE_SPEED * GetFrameTime()
 		}
-		draw_render_surface(panel_tex, {tex_offset.x, tex_offset.y, rect.width + SHADOW_SPACE * 2, rect.height + SHADOW_SPACE * 2}, dst, Fade(WHITE, time))
+		if idx == len(widget_stack) - 1 {
+			opacity += (1 - opacity) * FADE_SPEED * GetFrameTime()
+		} else {
+			opacity -= opacity * FADE_SPEED * GetFrameTime()
+		}
+		{
+			FACTOR :: 10
+			if .expand_down in opts {
+				dst.y -= FACTOR * (1 - time)
+			} else if .expand_up in opts {
+				dst.y += FACTOR * (1 - time)
+			}
+			if .expand_right in opts {
+				dst.x -= FACTOR * (1 - time)
+			} else if .expand_left in opts {
+				dst.x += FACTOR * (1 - time)
+			}
+		}
+		draw_render_surface(panel_tex, {tex_offset.x, tex_offset.y, dst.width, dst.height}, dst, Fade(blend_colors({240, 240, 240, 255}, WHITE, opacity), time))
 		rlPopMatrix()
 
 		if !self.exists {
+			ordered_remove(&widget_stack, idx)
 			delete_key(&widget_map, self.id)
 			widget_reserved[i] = false
 		}
-		if hidden && time < 0.1 {
-			self.exists = false
-		}
+		self.exists = false
 	}
 		
 	

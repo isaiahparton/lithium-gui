@@ -65,9 +65,6 @@ push_layout :: proc(){
 		spacing = style.spacing,
 		full_rect = {width, height, 0, 0},
 	}
-	if layout_idx > 0 {
-		layout[layout_idx].last_rect = layout[layout_idx - 1].last_rect
-	}
 }
 pop_layout :: proc() -> Rectangle {
 	assert(ctx.layout_idx >= 0, "pop_layout(): Layout stack is already empty")
@@ -86,7 +83,7 @@ layout_set_spacing :: proc(spacing: f32){
 layout_reset_spacing :: proc(){
 	layout_set_spacing(ctx.style.spacing)
 }
-layout_set_size :: proc(width, height: f32){
+set_size :: proc(width, height: f32){
 	ctx.layout[ctx.layout_idx].size = {width, height}
 }
 layout_set_width :: proc(width: f32, relative: bool) {
@@ -97,7 +94,7 @@ layout_set_width :: proc(width: f32, relative: bool) {
 	}
 	layout.size.x -= ctx.style.padding
 }
-layout_set_side :: proc(side: Rect_Side){
+set_side :: proc(side: Rect_Side){
 	ctx.layout[ctx.layout_idx].side = side
 }
 layout_set_last :: proc(rect: Rectangle){
