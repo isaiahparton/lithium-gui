@@ -304,29 +304,45 @@ end :: proc(){
 		dst := Rectangle{-half_width, -half_height, rect.width, rect.height}
 		dst = expand_rect(dst, SHADOW_SPACE)
 		if closing {
-			time -= FADE_SPEED * GetFrameTime()
+			time -= 2 * GetFrameTime()
 		} else {
-			time += (1 - time) * FADE_SPEED * GetFrameTime()
+			time += 2 * GetFrameTime()
 		}
+		time = clamp(time, 0, 1)
 		if idx == len(widget_stack) - 1 {
 			opacity += (1 - opacity) * FADE_SPEED * GetFrameTime()
 		} else {
 			opacity -= opacity * FADE_SPEED * GetFrameTime()
 		}
+		src := dst
 		{
-			FACTOR :: 10
-			if .expand_down in opts {
-				dst.y -= FACTOR * (1 - time)
-			} else if .expand_up in opts {
-				dst.y += FACTOR * (1 - time)
+			/*if (.expand_down in opts) || (.expand_up in opts) {
+				dst.height -= dst.height * (1 - time)
 			}
-			if .expand_right in opts {
-				dst.x -= FACTOR * (1 - time)
-			} else if .expand_left in opts {
-				dst.x += FACTOR * (1 - time)
+			if (.expand_up in opts) {
+				dst.y += dst.height * (1 - time)
+			}
+			if (.expand_right in opts) || (.expand_left in opts) {
+				dst.width -= dst.width * (1 - time)
+			}
+			if (.expand_left in opts) {
+				dst.x += dst.width * (1 - time)
+			}*/
+			e_time := EaseBackInOut(time, 0, 1, 1) if closing else EaseBounceOut(time, 0, 1, 1)
+			if (.expand_down in opts) || (.expand_up in opts) {
+				dst.height -= dst.height * (1 - e_time)
+			}
+			if (.expand_up in opts) {
+				dst.y += dst.height * (1 - e_time)
+			}
+			if (.expand_right in opts) || (.expand_left in opts) {
+				dst.width -= dst.width * (1 - e_time)
+			}
+			if (.expand_left in opts) {
+				dst.x += dst.width * (1 - e_time)
 			}
 		}
-		draw_render_surface(panel_tex, {tex_offset.x, tex_offset.y, dst.width, dst.height}, dst, Fade(blend_colors({245, 245, 245, 255}, WHITE, opacity), time))
+		draw_render_surface(panel_tex, {tex_offset.x, tex_offset.y, src.width, src.height}, dst, Fade(blend_colors({245, 245, 245, 255}, WHITE, opacity), time))
 		rlPopMatrix()
 
 		if closing && time < 0.1 {
