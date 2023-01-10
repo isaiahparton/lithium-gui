@@ -1,6 +1,7 @@
 package gui
 import "vendor:raylib"
 import "core:fmt"
+import "core:runtime"
 import "core:strings"
 import "core:math"
 import "core:os"
@@ -17,7 +18,8 @@ main :: proc(){
 
 	vals := [3]bool{false, false, false}
 	amogus := 0
-	text1, text2 := "", ""
+	something := ""
+	name, company, address := "", "", ""
 
 	for !WindowShouldClose() {
 		ctx.width = cast(f32)GetScreenWidth()
@@ -29,29 +31,41 @@ main :: proc(){
 
 		begin()
 
-		if begin_widget({-300, -300, 600, 600}, {0.5, 0.5, 0, 0}, "main", {}) {
-			text("fancy text input", .near, .near, {})
-			fancy_text_box(&text1, "Type something here", {})
-			text("regular text input", .near, .near, {})
-			text_box(&text2, {})
-			push_layout()
+		if begin_widget({-250, -300, 500, 600}, {0.5, 0.5, 0, 0}, "main", {}) {
+			fancy_text_box(&something, "Type something here", {})
+			begin_section("options")
 			set_side(.right)
 			checkbox(&vals[0], "first", {})
 			checkbox(&vals[1], "second", {})
 			checkbox(&vals[2], "third", {})
-			pop_layout()
-			if (.submit in button("print invoice", {})) {
-				toggle_popup("color")
+			end_section()
+			divide_size(3)
+			if (.submit in button("open popup", {})) {
+				open_child_popup("my_popup", {0, 116}, {.align_center})
 			}
+			set_side(.right)
+			button("hi", {})
+			button("sup", {})
 			end_widget()
 		}
-		if begin_popup({-200, 20, 400, 400}, {0.5, 0.5, 0, 0}, "color", {.expand_down}) {
-			text("hello there", .center, .near, {.align_center})
-			fancy_text_box(&text1, "Name", {})
-			fancy_text_box(&text1, "Address", {})
+		if begin_popup("my_popup", {.expand_down}) {
+			if (.submit in button("hey", {})) {
+				open_child_popup("your_popup", {200, 300}, {})
+			}
+			if (.submit in button("bye", {})) {
+				close_popup("my_popup")
+			}
 			end_popup()
 		}
-		
+		if begin_popup("your_popup", {.expand_down}) {
+			if (.submit in button("hey", {})) {
+				break
+			}
+			if (.submit in button("bye", {})) {
+				close_popup("your_popup")
+			}
+			end_popup()
+		}
 
 		draw_string(ctx.style.font, fmt.aprintf("%i fps", GetFPS()), {0, 0}, 26, BLACK)
 		draw_string(ctx.style.font, count_noun(ctx.control_count, "control"), {0, 26}, 26, BLACK)
@@ -65,4 +79,7 @@ main :: proc(){
 
 		EndDrawing()
 	}
+
+	uninit_context()
+	CloseWindow()
 }	

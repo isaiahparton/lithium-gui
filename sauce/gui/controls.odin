@@ -196,19 +196,24 @@ end_free_control :: proc() -> Result_Set {
 get_control_rect :: proc(opts: Option_Set) -> Rectangle {
 	layout := &ctx.layout[ctx.layout_idx]
 	if layout.last_rect == {} {
+		rect := Rectangle{}
 		if ctx.layout_idx > 0 {
 			prev_layout := &ctx.layout[ctx.layout_idx - 1]
-			return get_next_rect(prev_layout.full_rect, layout.size, prev_layout.side, opts)
+			rect = get_next_rect(prev_layout.full_rect, layout.size, prev_layout.side, opts)
 		} else {
 			inner_rect := ctx.widget[ctx.widget_idx].inner_rect
-			rect := Rectangle{inner_rect.x, inner_rect.y, inner_rect.width, layout.size.y}
+			rect = Rectangle{inner_rect.x, inner_rect.y, inner_rect.width, layout.size.y}
 			if ctx.cnt_idx >= 0 {
 				offset := ctx.cnt_data[ctx.cnt_idx].scroll
 				rect.x += offset.x
 				rect.y += offset.y
 			}
-			return rect
 		}
+		if layout.section {
+			rect.x += ctx.style.spacing
+			rect.y += ctx.style.spacing
+		}
+		return rect
 	}
 	return get_next_rect(layout.last_rect, layout.size, layout.side, opts)
 }

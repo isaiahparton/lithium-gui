@@ -96,11 +96,13 @@ begin_widget :: proc(a_rect, r_rect: Rectangle, title: string, opts: Option_Set)
 	self.exists = true
 	self.title = title
 	self.opts = opts
-	self.rect = {
-		a_rect.x + r_rect.x * width,
-		a_rect.y + r_rect.y * height,
-		a_rect.width + r_rect.width * width,
-		a_rect.height + r_rect.height * height,
+	if .popup not_in opts {
+		self.rect = {
+			a_rect.x + r_rect.x * width,
+			a_rect.y + r_rect.y * height,
+			a_rect.width + r_rect.width * width,
+			a_rect.height + r_rect.height * height,
+		}
 	}
 	self.inner_rect = {
 		self.rect.x + style.padding,
@@ -133,8 +135,8 @@ begin_widget :: proc(a_rect, r_rect: Rectangle, title: string, opts: Option_Set)
 	max_panel_height = max(max_panel_height, self.rect.height)
 	radius := style.corner_radius * 2
 	expanded_rect := expand_rect(self.rect, 32)
-	raylib.DrawTextureNPatch(shadow_tex, widget_npatch, expanded_rect, {}, 0, raylib.WHITE)
-	raylib.DrawTextureNPatch(widget_tex, widget_npatch, expanded_rect, {}, 0, style.colors[.foreground])
+	raylib.DrawTextureNPatch(shadow_tex, shadow_npatch, expanded_rect, {}, 0, raylib.WHITE)
+	raylib.DrawTextureNPatch(widget_tex, widget_npatch, self.rect, {}, 0, style.colors[.foreground])
 	push_layout()
 	return true
 }
@@ -142,8 +144,7 @@ end_widget :: proc(){
 	using ctx
 	using raylib
 	pop_layout()
-	expanded_rect := expand_rect(widget[widget_idx].rect, 32)
-	raylib.DrawTextureNPatch(widget_tex, widget_npatch, expanded_rect, {}, 0, Fade(WHITE, (1.0 - widget[widget_idx].opacity) * 0.35))
+	raylib.DrawTextureNPatch(widget_tex, widget_npatch, widget[widget_idx].rect, {}, 0, Fade(WHITE, (1.0 - widget[widget_idx].opacity) * 0.35))
 	raylib.rlPopMatrix()
 	raylib.EndTextureMode()
 
@@ -158,11 +159,39 @@ end_widget :: proc(){
 	}
 }
 
-open_popup :: proc(idx: int) {
-
+open_child_popup :: proc(name: string, size: [2]f32, opts: Option_Set) {
+	using ctx
+	id := get_id_string(name)
+	idx := _create_widget(id)
+	if idx < 0 {
+		return
+	}
+	parent_rect := layout[layout_idx].last_rect
+	size := size
+	if size.x == 0 {
+		size.x = parent_rect.width
+	}
+	if size.y == 0 {
+		size.y = parent_rect.height
+	}
+	widget[idx].rect = get_next_rect(parent_rect, size, .bottom, opts)
 }
-close_popup :: proc(idx: int) {
-	ctx.widget[idx].closing = true
+open_popup :: proc(name: string, rect: Rectangle, opts: Option_Set) {
+	using ctx
+	id := get_id_string(name)
+	idx := _create_widget(id)
+	if idx < 0 {
+		return
+	}
+	widget[idx].rect = rect
+}
+close_popup :: proc(name: string) {
+	using ctx
+	id := get_id_string(name)
+	idx, ok := widget_map[id]
+	if ok {
+		widget[idx].closing = true
+	}
 }
 toggle_popup :: proc(name: string) {
 	using ctx
@@ -175,8 +204,8 @@ toggle_popup :: proc(name: string) {
 	}
 }
 
-begin_popup :: proc(a_rect, r_rect: Rectangle, name: string, opts: Option_Set) -> bool {
-	return begin_widget(a_rect, r_rect, name, opts + {.closed, .popup, .topmost})
+begin_popup :: proc(name: string, opts: Option_Set) -> bool {
+	return begin_widget({}, {}, name, opts + {.closed, .popup, .topmost})
 }
 end_popup :: proc(){
 	end_widget()

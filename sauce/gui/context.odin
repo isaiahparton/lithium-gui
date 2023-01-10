@@ -70,8 +70,6 @@ Context :: struct {
 	active_widget: int,
 	widget_count, widget_idx: int,
 	widget_hover: bool,
-	widget_drag: int,
-	widget_resize: bool,
 	widget_rect: Rectangle,
 	widget: [MAX_WIDGETS]Widget,
 	widget_reserved: [MAX_WIDGETS]bool,
@@ -79,7 +77,6 @@ Context :: struct {
 	// layout state
 	layout_idx: int,
 	layout: [MAX_LAYOUTS]Layout,
-	set_rect: bool,
 	// text entry
 	number_text: string,
 	buffer: [dynamic]u8,
@@ -105,11 +102,8 @@ Context :: struct {
 	panel_tex: raylib.RenderTexture,
 	tex_offset: [2]f32,
 	max_panel_height: f32,
-	widget_tex: raylib.Texture,
-	shadow_tex: raylib.Texture,
-	widget_npatch: raylib.NPatchInfo,
-	rect_tex: raylib.Texture,
-	rect_npatch: raylib.NPatchInfo,
+	widget_tex, shadow_tex, rect_tex: raylib.Texture,
+	widget_npatch, shadow_npatch, rect_npatch: raylib.NPatchInfo,
 }
 ctx : Context = {}
 
@@ -126,7 +120,8 @@ init_context :: proc(){
 		icon_cols = cast(int)icon_atlas.width / style.icon_size
 		widget_tex = raylib.LoadTexture("./widget.png")
 		shadow_tex = raylib.LoadTexture("./shadow.png")
-		widget_npatch = { { 0, 0, cast(f32)widget_tex.width, cast(f32)widget_tex.height }, 40, 40, 40, 40, .NINE_PATCH }
+		widget_npatch = { { 0, 0, cast(f32)widget_tex.width, cast(f32)widget_tex.height }, 9, 9, 9, 9, .NINE_PATCH }
+		shadow_npatch = { { 0, 0, cast(f32)shadow_tex.width, cast(f32)shadow_tex.height }, 40, 40, 40, 40, .NINE_PATCH }
 		rect_tex = raylib.LoadTexture("./rect.png")
 		rect_npatch = { { 0, 0, cast(f32)rect_tex.width, cast(f32)rect_tex.height }, 5, 5, 5, 5, .NINE_PATCH }
 	}
@@ -158,7 +153,7 @@ init_default_style :: proc(){
 	padding = 20
 	spacing = 16
 	corner_radius = 0
-	icon_size = 24
+	icon_size = 2
 	font = raylib.LoadFontEx("./fonts/Muli-SemiBold.ttf", 26, nil, 1024)
 	raylib.SetTextureFilter(font.texture, .BILINEAR)
 }
@@ -280,7 +275,7 @@ end :: proc(){
 					top = idx
 				}
 				active_widget = i
-			} else if (.popup in widget[i].opts) && IsMouseButtonPressed(.LEFT) {
+			} else if (prev_top == idx) && (.popup in widget[i].opts) && IsMouseButtonPressed(.LEFT) {
 				widget[i].closing = true
 			}
 		}
@@ -299,14 +294,12 @@ end :: proc(){
 			continue
 		}
 		half_width, half_height := rect.width / 2, rect.height / 2
-		rlPushMatrix()
-		rlTranslatef(rect.x + half_width, rect.y + half_height, 0)
-		dst := Rectangle{-half_width, -half_height, rect.width, rect.height}
-		dst = expand_rect(dst, SHADOW_SPACE)
+		dst := expand_rect(rect, SHADOW_SPACE)
+		SPEED :: 6.5
 		if closing {
-			time -= 2 * GetFrameTime()
+			time -= SPEED * GetFrameTime()
 		} else {
-			time += 2 * GetFrameTime()
+			time += SPEED * GetFrameTime()
 		}
 		time = clamp(time, 0, 1)
 		if idx == len(widget_stack) - 1 {
@@ -314,38 +307,42 @@ end :: proc(){
 		} else {
 			opacity -= opacity * FADE_SPEED * GetFrameTime()
 		}
-		src := dst
+		src := Rectangle{tex_offset.x, tex_offset.y, dst.width, dst.height}
 		{
-			/*if (.expand_down in opts) || (.expand_up in opts) {
-				dst.height -= dst.height * (1 - time)
-			}
-			if (.expand_up in opts) {
-				dst.y += dst.height * (1 - time)
+			MOVE :: 10
+			if (.expand_down in opts) {
+				dst.y -= MOVE * (1 - time)
+			} else if (.expand_up in opts) {
+				dst.y += MOVE * (1 - time)
 			}
 			if (.expand_right in opts) || (.expand_left in opts) {
 				dst.width -= dst.width * (1 - time)
 			}
 			if (.expand_left in opts) {
 				dst.x += dst.width * (1 - time)
-			}*/
-			e_time := EaseBackInOut(time, 0, 1, 1) if closing else EaseBounceOut(time, 0, 1, 1)
+			}
+			/*e_time := EaseQuadOut(time, 0, 1, 1)
+			height := dst.height
+			offset := dst.height * (1 - e_time)
 			if (.expand_down in opts) || (.expand_up in opts) {
-				dst.height -= dst.height * (1 - e_time)
+				src.height -= offset
+				dst.height -= offset
 			}
 			if (.expand_up in opts) {
-				dst.y += dst.height * (1 - e_time)
+				dst.y += offset
+			} else if (.expand_down in opts) {
+				src.y += offset
 			}
 			if (.expand_right in opts) || (.expand_left in opts) {
 				dst.width -= dst.width * (1 - e_time)
 			}
 			if (.expand_left in opts) {
 				dst.x += dst.width * (1 - e_time)
-			}
+			}*/
 		}
-		draw_render_surface(panel_tex, {tex_offset.x, tex_offset.y, src.width, src.height}, dst, Fade(blend_colors({245, 245, 245, 255}, WHITE, opacity), time))
-		rlPopMatrix()
+		draw_render_surface(panel_tex, src, dst, Fade(blend_colors({245, 245, 245, 255}, WHITE, opacity), time))
 
-		if closing && time < 0.1 {
+		if closing && time < 0.01 {
 			self.exists = false
 		}
 		if !self.exists {
@@ -357,10 +354,6 @@ end :: proc(){
 	}
 
 	widget_count = 0
-
-	if IsMouseButtonReleased(.LEFT) {
-		widget_drag = -1
-	}
 }
 
 is_ctrl_down :: proc() -> bool {
