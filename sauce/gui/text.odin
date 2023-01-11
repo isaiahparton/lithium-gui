@@ -159,7 +159,7 @@ draw_string :: proc(font: Font, text: string, origin: [2]f32, scale: f32, tint: 
     return offset
 }
 draw_aligned_string :: proc(font: Font, text: string, origin: [2]f32, scale: f32, tint: Color, align_x, align_y: Alignment) -> [2]f32 {
-    if text == {} {
+    if text == "" {
         return {}
     }
 	text_size := measure_string(font, text, scale)
@@ -169,4 +169,25 @@ draw_aligned_string :: proc(font: Font, text: string, origin: [2]f32, scale: f32
 	if align_y == .center do offset.y -= text_size.y / 2
 	else if align_y == .far do offset.y -= text_size.y
 	return draw_string(font, text, origin + offset, scale, tint)
+}
+draw_bound_string :: proc(font: Font, text: string, rect: Rectangle, scale: f32, tint: Color, align_x, align_y: Alignment) -> [2]f32 {
+    if text == "" {
+        return {}
+    }
+    origin := [2]f32{rect.x, rect.y}
+    if align_x == .near {
+        origin.x += ctx.style.text_padding
+    } else if align_x == .center {
+        origin.x += rect.width / 2
+    } else if align_x == .far {
+        origin.x += rect.width - ctx.style.text_padding
+    }
+    if align_y == .near {
+        origin.y += ctx.style.text_padding
+    } else if align_y == .center {
+        origin.y += rect.height / 2
+    } else if align_y == .far {
+        origin.y += rect.height - ctx.style.text_padding
+    }
+    return draw_aligned_string(font, text, origin, scale, tint, align_x, align_y)
 }

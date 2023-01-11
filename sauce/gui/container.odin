@@ -56,7 +56,7 @@ push_container :: proc(rect: Rectangle, opts: Option_Set, loc := #caller_locatio
 	self.scroll_target.y = clamp(self.scroll_target.y, 0, max_y)
 
 	raylib.BeginScissorMode(i32(tex_offset.x), i32(tex_offset.y), i32(rect.width), i32(rect.height))
-	push_layout()
+	//push_layout()
 }
 pop_container :: proc(){
 	using ctx
@@ -64,7 +64,7 @@ pop_container :: proc(){
 
 	self := &cnt_data[cnt_idx]
 
-	pop_layout()
+	//pop_layout()
 	raylib.EndScissorMode()
 	raylib.rlPopMatrix()
 	raylib.EndTextureMode()

@@ -7,7 +7,7 @@ Font::raylib.Font
 Rectangle::raylib.Rectangle
 Color::raylib.Color
 KeyboardKey::raylib.KeyboardKey
-Alignment :: enum {
+Alignment :: enum u8 {
 	near,
 	center,
 	far,
@@ -76,7 +76,7 @@ Context :: struct {
 	widget_map: map[Id]int,
 	// layout state
 	layout_idx: int,
-	layout: [MAX_LAYOUTS]Layout,
+	layout_data: [MAX_LAYOUTS]Layout,
 	// text entry
 	number_text: string,
 	buffer: [dynamic]u8,
@@ -95,7 +95,7 @@ Context :: struct {
 	// screen size
 	width, height: f32,
 	// focus control
-	hide_cursor, popup: bool,
+	hide_cursor: bool,
 	// icon atlas
 	icon_atlas: raylib.Texture,
 	icon_cols: int,
@@ -119,8 +119,8 @@ init_context :: proc(){
 		icon_atlas = raylib.LoadTexture("./icons/atlas.png")
 		icon_cols = cast(int)icon_atlas.width / style.icon_size
 		widget_tex = raylib.LoadTexture("./widget.png")
-		shadow_tex = raylib.LoadTexture("./shadow.png")
 		widget_npatch = { { 0, 0, cast(f32)widget_tex.width, cast(f32)widget_tex.height }, 9, 9, 9, 9, .NINE_PATCH }
+		shadow_tex = raylib.LoadTexture("./shadow.png")
 		shadow_npatch = { { 0, 0, cast(f32)shadow_tex.width, cast(f32)shadow_tex.height }, 40, 40, 40, 40, .NINE_PATCH }
 		rect_tex = raylib.LoadTexture("./rect.png")
 		rect_npatch = { { 0, 0, cast(f32)rect_tex.width, cast(f32)rect_tex.height }, 5, 5, 5, 5, .NINE_PATCH }
@@ -150,8 +150,8 @@ init_default_style :: proc(){
 	
 	text_padding = 6
 	outline_thick = 1.1
-	padding = 20
-	spacing = 16
+	padding = 14
+	spacing = 10
 	corner_radius = 0
 	icon_size = 2
 	font = raylib.LoadFontEx("./fonts/Muli-SemiBold.ttf", 26, nil, 1024)
@@ -255,7 +255,7 @@ end :: proc(){
 		control.exists = false
 	}
 
-	if hover_id != 0 || dragging {
+	if hover_id != 0 || focus_id != 0 {
 		if hover_text {
 			SetMouseCursor(.IBEAM)
 		} else {
@@ -293,7 +293,6 @@ end :: proc(){
 			time = 0
 			continue
 		}
-		half_width, half_height := rect.width / 2, rect.height / 2
 		dst := expand_rect(rect, SHADOW_SPACE)
 		SPEED :: 6.5
 		if closing {
@@ -302,46 +301,13 @@ end :: proc(){
 			time += SPEED * GetFrameTime()
 		}
 		time = clamp(time, 0, 1)
-		if idx == len(widget_stack) - 1 {
-			opacity += (1 - opacity) * FADE_SPEED * GetFrameTime()
-		} else {
+		if (.hold_focus in widget[_get_top_widget()].opts) && (idx != len(widget_stack) - 1) {
 			opacity -= opacity * FADE_SPEED * GetFrameTime()
+		} else {
+			opacity += (1 - opacity) * FADE_SPEED * GetFrameTime()
 		}
 		src := Rectangle{tex_offset.x, tex_offset.y, dst.width, dst.height}
-		{
-			MOVE :: 10
-			if (.expand_down in opts) {
-				dst.y -= MOVE * (1 - time)
-			} else if (.expand_up in opts) {
-				dst.y += MOVE * (1 - time)
-			}
-			if (.expand_right in opts) || (.expand_left in opts) {
-				dst.width -= dst.width * (1 - time)
-			}
-			if (.expand_left in opts) {
-				dst.x += dst.width * (1 - time)
-			}
-			/*e_time := EaseQuadOut(time, 0, 1, 1)
-			height := dst.height
-			offset := dst.height * (1 - e_time)
-			if (.expand_down in opts) || (.expand_up in opts) {
-				src.height -= offset
-				dst.height -= offset
-			}
-			if (.expand_up in opts) {
-				dst.y += offset
-			} else if (.expand_down in opts) {
-				src.y += offset
-			}
-			if (.expand_right in opts) || (.expand_left in opts) {
-				dst.width -= dst.width * (1 - e_time)
-			}
-			if (.expand_left in opts) {
-				dst.x += dst.width * (1 - e_time)
-			}*/
-		}
 		draw_render_surface(panel_tex, src, dst, Fade(blend_colors({245, 245, 245, 255}, WHITE, opacity), time))
-
 		if closing && time < 0.01 {
 			self.exists = false
 		}

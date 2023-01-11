@@ -10,16 +10,14 @@ import "core:math/rand"
 main :: proc(){
 	using raylib
 
-	SetConfigFlags({.WINDOW_RESIZABLE})//, .MSAA_4X_HINT})
+	SetConfigFlags({.WINDOW_RESIZABLE})
 	InitWindow(1400, 900, "lithium-gui demo")
 	SetTargetFPS(300)
 
 	init_context()
 
 	vals := [3]bool{false, false, false}
-	amogus := 0
 	something := ""
-	name, company, address := "", "", ""
 
 	for !WindowShouldClose() {
 		ctx.width = cast(f32)GetScreenWidth()
@@ -31,39 +29,23 @@ main :: proc(){
 
 		begin()
 
-		if begin_widget({-250, -300, 500, 600}, {0.5, 0.5, 0, 0}, "main", {}) {
-			fancy_text_box(&something, "Type something here", {})
-			begin_section("options")
-			set_side(.right)
-			checkbox(&vals[0], "first", {})
-			checkbox(&vals[1], "second", {})
-			checkbox(&vals[2], "third", {})
-			end_section()
-			divide_size(3)
-			if (.submit in button("open popup", {})) {
-				open_child_popup("my_popup", {0, 116}, {.align_center})
-			}
-			set_side(.right)
-			button("hi", {})
-			button("sup", {})
-			end_widget()
+		if begin_widget({-200, -200, 400, 400}, {0.5, 0.5, 0, 0}, "main", {}) {
+			defer end_widget()
+
+			menu("menu", {})
 		}
-		if begin_popup("my_popup", {.expand_down}) {
-			if (.submit in button("hey", {})) {
-				open_child_popup("your_popup", {200, 300}, {})
+
+		if begin_popup("menu", {.auto_resize}) {
+			set_height(30)
+			set_spacing(0)
+			for i in 0..=3 {
+				ctx.loc_offset = i
+				if .submit in button(fmt.aprintf("Button %i", i), {.subtle}) {
+					close_widget()
+				}
 			}
-			if (.submit in button("bye", {})) {
-				close_popup("my_popup")
-			}
-			end_popup()
-		}
-		if begin_popup("your_popup", {.expand_down}) {
-			if (.submit in button("hey", {})) {
-				break
-			}
-			if (.submit in button("bye", {})) {
-				close_popup("your_popup")
-			}
+			set_spacing(12)
+			checkbox(&vals[0], "Option", {})
 			end_popup()
 		}
 
@@ -72,10 +54,6 @@ main :: proc(){
 		draw_string(ctx.style.font, count_noun(ctx.widget_count, "widget"), {0, 54}, 26, BLACK)
 
 		end()
-
-		//fmt.println(frame)
-		
-		//DrawFPS(0, 0)
 
 		EndDrawing()
 	}

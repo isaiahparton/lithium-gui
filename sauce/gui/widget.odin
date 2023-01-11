@@ -10,11 +10,11 @@ WidgetIndex :: u8
 
 Widget :: struct {
 	exists, closing: bool,
-	time, opacity: f32,
+	time, opacity, padding: f32,
 	title: string,
 	contents: map[Id]int,
 	rect, inner_rect: Rectangle,
-	space, tex_offset: [2]f32,
+	tex_offset: [2]f32,
 	id: Id,
 	z: int,
 	opts: Option_Set,
@@ -76,7 +76,11 @@ _create_widget :: proc(id: Id) -> int {
 @private
 _destroy_widget :: proc(idx: int) {
 	using ctx
-	
+}
+@private
+_get_top_widget :: proc() -> int {
+	using ctx
+	return widget_stack[len(widget_stack) - 1]
 }
 
 begin_widget :: proc(a_rect, r_rect: Rectangle, title: string, opts: Option_Set) -> bool {
@@ -104,18 +108,18 @@ begin_widget :: proc(a_rect, r_rect: Rectangle, title: string, opts: Option_Set)
 			a_rect.height + r_rect.height * height,
 		}
 	}
+	self.padding = 4 if (.popup in opts) else style.padding
 	self.inner_rect = {
-		self.rect.x + style.padding,
-		self.rect.y + style.padding,
-		self.rect.width - style.padding * 2,
-		self.rect.height - style.padding * 2,
+		self.rect.x + self.padding,
+		self.rect.y + self.padding,
+		self.rect.width - self.padding * 2,
+		self.rect.height - self.padding * 2,
 	}
-	self.space = {}
 	widget_rect = self.rect
 	//--- current widget state ---//
 	widget_count += 1
 	widget_idx = idx
-	widget_hover = (active_widget == idx && widget_stack[len(widget_stack) - 1] == idx)
+	widget_hover = (active_widget == idx && _get_top_widget() == idx)
 	//--- setup surface area for drawing ---//
 	raylib.BeginTextureMode(panel_tex)
 	if widget_count == 1 {
@@ -126,29 +130,44 @@ begin_widget :: proc(a_rect, r_rect: Rectangle, title: string, opts: Option_Set)
 	raylib.rlPushMatrix()
 	raylib.rlTranslatef(tex_offset.x - self.rect.x + SHADOW_SPACE, tex_offset.y - self.rect.y + SHADOW_SPACE, 0)
 	self.tex_offset = tex_offset
-	if tex_offset.x + self.rect.width > f32(panel_tex.texture.width) {
+	full_width := self.rect.width + SHADOW_SPACE * 2
+	if tex_offset.x + full_width > f32(panel_tex.texture.width) {
 		tex_offset.x = 0
 		tex_offset.y += max_panel_height + SHADOW_SPACE * 2
 	} else {
-		tex_offset.x += self.rect.width + SHADOW_SPACE * 2
+		tex_offset.x += full_width
 	}
 	max_panel_height = max(max_panel_height, self.rect.height)
 	radius := style.corner_radius * 2
 	expanded_rect := expand_rect(self.rect, 32)
 	raylib.DrawTextureNPatch(shadow_tex, shadow_npatch, expanded_rect, {}, 0, raylib.WHITE)
 	raylib.DrawTextureNPatch(widget_tex, widget_npatch, self.rect, {}, 0, style.colors[.foreground])
-	push_layout()
+	
+	layout_idx += 1
+	layout_data[layout_idx] = {
+		size = {self.inner_rect.width, self.inner_rect.height},
+		origin = {self.inner_rect.x, self.inner_rect.y},
+		spacing = style.spacing,
+		column = true,
+	}
+
 	return true
 }
 end_widget :: proc(){
 	using ctx
 	using raylib
-	pop_layout()
+
 	raylib.DrawTextureNPatch(widget_tex, widget_npatch, widget[widget_idx].rect, {}, 0, Fade(WHITE, (1.0 - widget[widget_idx].opacity) * 0.35))
 	raylib.rlPopMatrix()
 	raylib.EndTextureMode()
 
 	self := &widget[widget_idx]
+
+	ly := &layout_data[layout_idx]
+	if .auto_resize in self.opts {
+		self.rect.height = ly.offset.y + self.padding * 2
+	}
+	layout_idx -= 1
 	
 	//--- delete entries for controls that don't exist ---//
 	for id, idx in self.contents {
@@ -159,14 +178,15 @@ end_widget :: proc(){
 	}
 }
 
-open_child_popup :: proc(name: string, size: [2]f32, opts: Option_Set) {
+
+open_child_popup :: proc(name: string, dir: Direction, size: [2]f32, opts: Option_Set) {
 	using ctx
 	id := get_id_string(name)
 	idx := _create_widget(id)
 	if idx < 0 {
 		return
 	}
-	parent_rect := layout[layout_idx].last_rect
+	parent_rect := layout_data[layout_idx].rect
 	size := size
 	if size.x == 0 {
 		size.x = parent_rect.width
@@ -174,7 +194,7 @@ open_child_popup :: proc(name: string, size: [2]f32, opts: Option_Set) {
 	if size.y == 0 {
 		size.y = parent_rect.height
 	}
-	widget[idx].rect = get_next_rect(parent_rect, size, .bottom, opts)
+	widget[idx].rect = get_next_rect(parent_rect, size, 0, dir, opts)
 }
 open_popup :: proc(name: string, rect: Rectangle, opts: Option_Set) {
 	using ctx
@@ -192,6 +212,10 @@ close_popup :: proc(name: string) {
 	if ok {
 		widget[idx].closing = true
 	}
+}
+close_widget :: proc() {
+	using ctx
+	widget[widget_idx].closing = true
 }
 toggle_popup :: proc(name: string) {
 	using ctx
